@@ -209,12 +209,40 @@ not host cron (per the architecture decision above).
 
 - Only company/source configured so far: **RBC**, Technology/Analytics/Research
   jobs — https://jobs.rbc.com/ca/en/c/technology-analytics-research-jobs
-- Exact scraping approach (static HTML vs JS-rendered, pagination, any
-  underlying API the page calls) has not been investigated yet — that's the
-  first implementation step for the RBC scraper.
 - More companies and filters will be added later; scraper architecture should
   make adding a new company a matter of adding a new scraper module + a
   `companies` row, not restructuring shared code.
+
+### RBC scraping approach (investigated 2026-09-17)
+
+RBC's careers site runs on Phenom People's Career Site Builder — looks
+JS-heavy, but the job data for each page of results is actually embedded
+directly in the server-rendered HTML, so **no browser/Playwright is needed
+for RBC**: a plain HTTP GET (`httpx`) is enough. Confirmed with plain `curl`
+(no special headers, cookies, or session) — no bot-blocking encountered.
+
+- Each category/search page embeds a `<script>var phApp = phApp || {...}`
+  blob containing a JSON object; the job listings live in there. Extract by
+  locating that blob and parsing it as JSON (don't regex the fields
+  individually — the blob is one JSON object, so parse it once).
+- **Pagination**: append `?from=<offset>&s=1` to the URL, `offset` in steps
+  of 10 (10 jobs embedded per page) — e.g. `...jobs?from=10&s=1` for the
+  second page. Keep incrementing until a page returns no new job IDs.
+  Query params like `start=` (a natural first guess) are silently ignored —
+  `from` is the real one, found by watching the network request an actual
+  "Next" click fires in a real browser.
+  - The default sort ("most relevant") isn't fully stable across requests —
+    consecutive pages can overlap slightly. Doesn't matter functionally
+    (the upsert on `(company_id, external_id)` makes re-seeing a job a
+    no-op), but prefer a "most recent" sort param if/when reused for other
+    categories, to minimize redundant fetches.
+- **Fields available per job** (confirmed from the embedded blob):
+  `jobId` (e.g. `"R-0000170843"` — use as `external_id`), `title`,
+  `postedDate` (ISO datetime, e.g. `"2026-08-12T00:00:00.000+0000"` — take
+  the date part), `category`, `location` / `cityStateCountry`, and
+  `applyUrl` — the real application link, which points at
+  `*.wd3.myworkdayjobs.com` for every job seen. **`platform` = `"Workday"`**
+  for RBC (answers the open question below).
 
 ## Deployment
 
@@ -273,11 +301,16 @@ not host cron (per the architecture decision above).
 
 ## Open questions / next steps
 
-- [ ] Investigate RBC's careers site structure (static vs JS-rendered,
-      pagination, possible internal API) to design the first scraper.
-- [ ] Scaffold Next.js app, Prisma schema, docker-compose.yml.
+- [x] Investigate RBC's careers site structure — see "RBC scraping approach"
+      under Current scope above.
+- [x] Scaffold Next.js app, Prisma schema, docker-compose.yml.
 - [ ] Set up self-hosted GitHub Actions runner on the personal server.
-- [ ] Confirm RBC's ATS platform name to populate `jobs.platform`.
+- [x] Confirm RBC's ATS platform name to populate `jobs.platform` — Workday.
 - [ ] Set up Cloudflare Tunnel + Access in front of the deployed `web` service.
 - [ ] Decide the exact deterministic external-ID scheme for sites without a
-      stable job ID (e.g. hash of title+location vs. slug from the URL).
+      stable job ID (e.g. hash of title+location vs. slug from the URL) —
+      not needed for RBC, which exposes a stable `jobId`, but still open for
+      future companies that might not.
+- [ ] Build the RBC scraper module (`scrapers/rbc.py`) using the approach
+      above, wire it into the runner + scheduler, and write the
+      `scrape_runs` row per CLAUDE.md's scraper behavior section.
