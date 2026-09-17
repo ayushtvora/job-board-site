@@ -1,16 +1,15 @@
 -- CreateTable
 CREATE TABLE "companies" (
-    "id" SERIAL NOT NULL,
     "slug" TEXT NOT NULL,
     "name" TEXT NOT NULL,
 
-    CONSTRAINT "companies_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "companies_pkey" PRIMARY KEY ("slug")
 );
 
 -- CreateTable
 CREATE TABLE "jobs" (
     "id" SERIAL NOT NULL,
-    "company_id" INTEGER NOT NULL,
+    "company_id" TEXT NOT NULL,
     "external_id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "url" TEXT NOT NULL,
@@ -31,7 +30,7 @@ CREATE TABLE "jobs" (
 -- CreateTable
 CREATE TABLE "scrape_runs" (
     "id" SERIAL NOT NULL,
-    "company_id" INTEGER NOT NULL,
+    "company_id" TEXT NOT NULL,
     "started_at" TIMESTAMP(3) NOT NULL,
     "finished_at" TIMESTAMP(3),
     "status" TEXT NOT NULL,
@@ -41,13 +40,10 @@ CREATE TABLE "scrape_runs" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "companies_slug_key" ON "companies"("slug");
-
--- CreateIndex
 CREATE UNIQUE INDEX "jobs_company_id_external_id_key" ON "jobs"("company_id", "external_id");
 
 -- AddForeignKey
-ALTER TABLE "jobs" ADD CONSTRAINT "jobs_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "jobs" ADD CONSTRAINT "jobs_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("slug") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "scrape_runs" ADD CONSTRAINT "scrape_runs_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "scrape_runs" ADD CONSTRAINT "scrape_runs_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("slug") ON DELETE RESTRICT ON UPDATE CASCADE;

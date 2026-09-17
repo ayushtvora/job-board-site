@@ -31,13 +31,12 @@ per-company/isolated, so it doesn't need to share code with the web app.
 
 ```
 companies
-  id            serial PK
-  slug          text unique      -- e.g. "rbc"
+  slug          text PK          -- e.g. "rbc"
   name          text             -- e.g. "RBC"
 
 jobs
   id            serial PK
-  company_id    int FK -> companies.id
+  company_id    text FK -> companies.slug
   external_id   text             -- job ID/slug from the source site
   title         text
   url           text
@@ -58,7 +57,7 @@ jobs
 
 scrape_runs
   id            serial PK
-  company_id    int FK -> companies.id
+  company_id    text FK -> companies.slug
   started_at    timestamptz
   finished_at   timestamptz null   -- null while a run is in progress
   status        text               -- "success" | "error"

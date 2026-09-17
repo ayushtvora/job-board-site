@@ -27,7 +27,7 @@ async function main() {
   const jobs = [
     // Default-visible: open, not applied, will apply.
     {
-      companyId: rbc.id,
+      companyId: rbc.slug,
       externalId: "R-00012345",
       title: "Software Developer",
       url: "https://jobs.rbc.com/ca/en/job/R-00012345",
@@ -37,7 +37,7 @@ async function main() {
       platform: "Workday",
     },
     {
-      companyId: rbc.id,
+      companyId: rbc.slug,
       externalId: "R-00012399",
       title: "Data Analyst",
       url: "https://jobs.rbc.com/ca/en/job/R-00012399",
@@ -47,7 +47,7 @@ async function main() {
       platform: "Workday",
     },
     {
-      companyId: shopify.id,
+      companyId: shopify.slug,
       externalId: "SHOP-4821",
       title: "Backend Engineer",
       url: "https://www.shopify.com/careers/SHOP-4821",
@@ -58,7 +58,7 @@ async function main() {
     },
     // No posted date exposed by the source site.
     {
-      companyId: shopify.id,
+      companyId: shopify.slug,
       externalId: "SHOP-4790",
       title: "Platform Engineer",
       url: "https://www.shopify.com/careers/SHOP-4790",
@@ -69,7 +69,7 @@ async function main() {
     },
     // Already applied -> hidden by default filter, visible via "show hidden".
     {
-      companyId: td.id,
+      companyId: td.slug,
       externalId: "TD-77213",
       title: "Software Engineer I",
       url: "https://jobs.td.com/en-CA/jobs/TD-77213",
@@ -83,7 +83,7 @@ async function main() {
     // Expired (is_active = false) -> hidden by default filter, but kept
     // because it was applied to.
     {
-      companyId: td.id,
+      companyId: td.slug,
       externalId: "TD-77050",
       title: "QA Engineer",
       url: "https://jobs.td.com/en-CA/jobs/TD-77050",
@@ -97,7 +97,7 @@ async function main() {
     },
     // Decided not to apply -> out of scope for both default and hidden views.
     {
-      companyId: rbc.id,
+      companyId: rbc.slug,
       externalId: "R-00011980",
       title: "Java Developer",
       url: "https://jobs.rbc.com/ca/en/job/R-00011980",

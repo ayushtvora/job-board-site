@@ -11,8 +11,7 @@ datasource db {
 }
 
 model Company {
-  id   Int    @id @default(autoincrement())
-  slug String @unique
+  slug String @id
   name String
 
   jobs       Job[]
@@ -23,7 +22,7 @@ model Company {
 
 model Job {
   id            Int       @id @default(autoincrement())
-  companyId     Int       @map("company_id")
+  companyId     String    @map("company_id")
   externalId    String    @map("external_id")
   title         String
   url           String
@@ -38,7 +37,7 @@ model Job {
   willApply     Boolean   @default(true) @map("will_apply")
   platform      String
 
-  company Company @relation(fields: [companyId], references: [id])
+  company Company @relation(fields: [companyId], references: [slug])
 
   @@unique([companyId, externalId])
   @@map("jobs")
@@ -46,13 +45,13 @@ model Job {
 
 model ScrapeRun {
   id           Int       @id @default(autoincrement())
-  companyId    Int       @map("company_id")
+  companyId    String    @map("company_id")
   startedAt    DateTime  @map("started_at")
   finishedAt   DateTime? @map("finished_at")
   status       String
   errorMessage String?   @map("error_message")
 
-  company Company @relation(fields: [companyId], references: [id])
+  company Company @relation(fields: [companyId], references: [slug])
 
   @@map("scrape_runs")
 }
