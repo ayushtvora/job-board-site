@@ -1,0 +1,271 @@
+# Job Board Site
+
+A personal tool that scrapes corporate career pages for job listings in specific
+fields, stores them in Postgres, and displays them in a web table where each job
+has a persistent "Applied?" checkbox — so I can track which jobs I've already
+applied to without re-checking manually every time I revisit the site.
+
+This is a single-user personal tool deployed on my own server. The app itself
+has no login/auth logic — access is gated at the network layer by Cloudflare
+Access in front of the deployment (see Deployment section).
+
+## Architecture
+
+Three containers, orchestrated with Docker Compose:
+
+1. **web** — Next.js (TypeScript, App Router) app. Serves the UI (job table)
+   and the API routes that read jobs / toggle "applied" state. Talks to Postgres
+   directly (via Prisma).
+2. **db** — PostgreSQL. Single source of truth for scraped jobs and applied state.
+3. **scraper** — Python service (Playwright for JS-rendered career sites, plus
+   BeautifulSoup/httpx for simpler static ones). Runs continuously with an
+   internal scheduler (not host cron) that kicks off a scrape on an interval
+   (e.g. daily). Writes directly to Postgres.
+
+Rationale: Next.js keeps UI+API in one deployable unit (simple on a personal
+server). Python was chosen for the scraper because of its scraping ecosystem
+(Playwright/BeautifulSoup), and because scraping logic is naturally
+per-company/isolated, so it doesn't need to share code with the web app.
+
+## Database schema (planned)
+
+```
+companies
+  id            serial PK
+  slug          text unique      -- e.g. "rbc"
+  name          text             -- e.g. "RBC"
+
+jobs
+  id            serial PK
+  company_id    int FK -> companies.id
+  external_id   text             -- job ID/slug from the source site
+  title         text
+  url           text
+  location      text
+  category      text             -- e.g. "Technology, Analytics & Research"
+  posted_date   date null        -- if the source site exposes it
+  first_seen_at timestamptz      -- set on first insert
+  last_seen_at  timestamptz      -- updated every time a scrape still finds it
+  is_active     boolean          -- false once a scrape run no longer finds it
+  applied       boolean default false
+  applied_at    timestamptz null
+  will_apply    boolean default true
+  platform      text             -- ATS platform, e.g. "Workday", "Eightfold"
+                                  -- set by the scraper, used as the link text
+                                  -- in the UI instead of the raw URL
+
+  unique (company_id, external_id)
+
+scrape_runs
+  id            serial PK
+  company_id    int FK -> companies.id
+  started_at    timestamptz
+  finished_at   timestamptz null   -- null while a run is in progress
+  status        text               -- "success" | "error"
+  error_message text null          -- set when status = "error"
+```
+
+Scraper behavior:
+- Upsert on `(company_id, external_id)`. Never overwrite `applied`,
+  `applied_at`, or `will_apply` on upsert — those are only ever changed by
+  the web app.
+- On each scrape run, for jobs not seen this run (i.e. `last_seen_at` wasn't
+  updated):
+  - If `applied = true`, keep the row but set `is_active = false` — preserves
+    applied history even after the listing closes.
+  - If `applied = false`, delete the row — no reason to keep a stale listing
+    I never applied to.
+- Each company gets its own scraper module (e.g. `scrapers/rbc.py`) implementing
+  a shared interface (return a list of normalized job dicts); a runner loops
+  over configured company scrapers. One company's scraper raising an error
+  must not stop the runner from scraping the remaining companies — catch and
+  isolate failures per company.
+- If a source site doesn't expose a stable job ID, the scraper must make one
+  up itself (e.g. a hash of title + location, or a slug derived from the job
+  URL) rather than leaving `external_id` blank. It must be **deterministic**
+  across runs for the same job — a random or run-dependent ID would break the
+  `(company_id, external_id)` upsert match and create duplicate rows every
+  scrape instead of updating `last_seen_at` on the existing one.
+- `category` is free text straight from the source site — no normalization
+  across companies is needed (a "Technology" category at one company doesn't
+  need to line up with another's naming).
+- Every run, per company, writes a `scrape_runs` row: `status = "success"` on
+  a normal completion, or `status = "error"` with `error_message` set if the
+  scraper raised. This is how the web app surfaces scrape failures (see
+  Default view below) without the scraper and web app calling each other
+  directly.
+
+## Default view (UI)
+
+The main table, in column order:
+
+| Company | Job Title | Job ID | Link | Posted Date | Applied | Will Apply |
+|---|---|---|---|---|---|---|
+
+- **Job ID** is `jobs.external_id`.
+- **Link** renders as a hyperlink to `jobs.url`, with link text set to
+  `jobs.platform` (e.g. "Workday") instead of the raw URL.
+- **Applied** and **Will Apply** render as checkboxes, editable inline; each
+  edit fires the `PATCH /api/jobs/:id` call (see API contract below).
+
+Default sort: `posted_date` descending (most recent first, nulls last), then
+`company` ascending, then `job_title` ascending.
+
+Default filter (applied automatically, no user action needed): show only rows
+where `is_active = true AND applied = false AND will_apply = true`. In other
+words, the default view is "open listings I haven't applied to and still
+intend to." Rows that fall out of this filter aren't deleted (unless the
+delete-on-scrape rule above already removed them) — they just aren't shown
+here.
+
+"Show hidden jobs" toggle: a single UI control that, when on, also includes
+rows that are hidden because they're expired (`is_active = false`) or already
+applied to (`applied = true`) — i.e. it drops the `is_active`/`applied`
+conditions from the filter but still respects `will_apply = true`. Jobs with
+`will_apply = false` aren't considered "hidden" in this sense and stay out of
+scope for now (a separate "show everything" view can cover those later if
+needed).
+
+Scrape error banner: the UI checks scrape status (see `GET /api/scrape-status`
+below) and shows a dismissible popup/banner if any company's most recent
+scrape run has `status = "error"`, naming the company so a broken scraper for
+one company doesn't get missed just because others are still succeeding.
+
+## API contract
+
+Both routes live in the Next.js app (`web`), backed by Prisma.
+
+**`GET /api/jobs`**
+- Returns the job list, sorted by the default sort order above. Default query
+  (no params) applies the default filter above and includes all default-view
+  columns.
+- `showHidden=true` drops the `is_active`/`applied` conditions from the
+  filter (still respecting `will_apply = true`), per the "Show hidden jobs"
+  toggle above.
+- Optional query params (future-friendly, not required for v1):
+  `company`, `is_active`, `applied`, `will_apply` to override the default
+  filter further, e.g. for a later "show everything" view.
+- Response: JSON array of jobs, each shaped like:
+  ```json
+  {
+    "id": 123,
+    "company": "RBC",
+    "title": "Software Developer",
+    "externalId": "R-00012345",
+    "url": "https://jobs.rbc.com/...",
+    "platform": "Workday",
+    "postedDate": "2026-09-10",
+    "applied": false,
+    "willApply": true
+  }
+  ```
+
+**`PATCH /api/jobs/:id`**
+- The *only* way `applied` and `will_apply` are ever modified — enforces the
+  "scraper never touches these" rule from the schema section.
+- Body: `{ "applied"?: boolean, "willApply"?: boolean }` — only these two
+  fields are accepted; any other field in the body is rejected (400).
+- When `applied` transitions to `true`, the server sets `applied_at = now()`;
+  when it transitions back to `false`, `applied_at` is cleared to `null`.
+- Returns the updated job row (same shape as above). 404 if `id` doesn't exist.
+
+**`GET /api/scrape-status`**
+- Returns the most recent `scrape_runs` row per company, so the UI can show
+  the error banner described in the Default view section.
+- Response: JSON array shaped like:
+  ```json
+  [
+    {
+      "company": "RBC",
+      "status": "error",
+      "errorMessage": "Timed out waiting for job list to render",
+      "finishedAt": "2026-09-17T06:03:12-04:00"
+    }
+  ]
+  ```
+- Polled by the UI on page load (and optionally on an interval) rather than
+  pushed — keeps web and scraper decoupled through Postgres only.
+
+## Scrape schedule
+
+Each configured site is scraped once per day at **6:00 AM** (server-local
+time — set the `TZ` env var explicitly on the scraper container so "6am"
+doesn't silently mean UTC). Handled by the scraper's own internal scheduler,
+not host cron (per the architecture decision above).
+
+## Current scope
+
+- Only company/source configured so far: **RBC**, Technology/Analytics/Research
+  jobs — https://jobs.rbc.com/ca/en/c/technology-analytics-research-jobs
+- Exact scraping approach (static HTML vs JS-rendered, pagination, any
+  underlying API the page calls) has not been investigated yet — that's the
+  first implementation step for the RBC scraper.
+- More companies and filters will be added later; scraper architecture should
+  make adding a new company a matter of adding a new scraper module + a
+  `companies` row, not restructuring shared code.
+
+## Deployment
+
+- GitHub Actions runs on a **self-hosted runner installed on my personal
+  server** (no SSH secrets needed). On push to `main`, it runs Prisma
+  migrations against the production database (`npx prisma migrate deploy`),
+  then builds the Docker images and runs `docker compose up -d --build` on
+  the server.
+- `docker-compose.yml` defines all three services plus a named volume for
+  Postgres data.
+- Env vars (DB credentials, connection strings) via `.env` on the server, not
+  committed to the repo.
+- Access control: **Cloudflare Access** sits in front of the deployed `web`
+  service (via a Cloudflare Tunnel or equivalent), restricting access to my
+  own identity. The Next.js app itself implements no auth — it trusts that
+  anything reaching it has already been authenticated by Cloudflare. This
+  only applies to the deployed instance; local dev has no such gate.
+
+## Local dev workflow
+
+- `docker compose up --build` runs all three services locally (web, db,
+  scraper) against a local Postgres volume — same compose file as production,
+  just pointed at `.env.local` instead of the server's `.env`.
+- For faster iteration on the web app, run Postgres in Docker
+  (`docker compose up db`) but run Next.js on the host with `npm run dev`,
+  pointed at that local Postgres via `DATABASE_URL`.
+- Prisma migrations: `npx prisma migrate dev` to create/apply a migration
+  locally and update the client; `npx prisma studio` to browse/edit data by
+  hand during development.
+- Seed data: a seed script (`prisma/seed.ts` or similar) inserts a handful of
+  fake companies/jobs, so the UI can be built and tested without repeatedly
+  hitting RBC's real site.
+- Scraper dev runs: the scraper entrypoint should support a `--once` flag (or
+  equivalent) to run a single scrape immediately on demand, instead of
+  waiting for the 6am schedule — needed for testing scraper changes locally.
+
+## Environment variables
+
+| Variable | Used by | Purpose |
+|---|---|---|
+| `DATABASE_URL` | web, scraper | Postgres connection string; must be consistent across both. |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | db | Initializes the Postgres container; `DATABASE_URL` is built from these. |
+| `TZ` | scraper | Explicit timezone (e.g. `America/Toronto`) so the 6am schedule means local time, not UTC. |
+| `NODE_ENV` | web | `development` locally, `production` on the server. |
+
+- Local values go in a gitignored `.env.local` (or `.env` used only by
+  `docker compose` locally); production values live in `.env` on the
+  personal server, per the Deployment section — neither is committed.
+
+## Conventions
+
+- Language: TypeScript for web app, Python for scraper.
+- ORM: Prisma (web app reads/writes Postgres, including migrations).
+- Keep scraper and web app decoupled — they only interact through Postgres,
+  never call each other directly.
+
+## Open questions / next steps
+
+- [ ] Investigate RBC's careers site structure (static vs JS-rendered,
+      pagination, possible internal API) to design the first scraper.
+- [ ] Scaffold Next.js app, Prisma schema, docker-compose.yml.
+- [ ] Set up self-hosted GitHub Actions runner on the personal server.
+- [ ] Confirm RBC's ATS platform name to populate `jobs.platform`.
+- [ ] Set up Cloudflare Tunnel + Access in front of the deployed `web` service.
+- [ ] Decide the exact deterministic external-ID scheme for sites without a
+      stable job ID (e.g. hash of title+location vs. slug from the URL).

@@ -1,0 +1,58 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Company {
+  id   Int    @id @default(autoincrement())
+  slug String @unique
+  name String
+
+  jobs       Job[]
+  scrapeRuns ScrapeRun[]
+
+  @@map("companies")
+}
+
+model Job {
+  id            Int       @id @default(autoincrement())
+  companyId     Int       @map("company_id")
+  externalId    String    @map("external_id")
+  title         String
+  url           String
+  location      String
+  category      String
+  postedDate    DateTime? @map("posted_date") @db.Date
+  firstSeenAt   DateTime  @default(now()) @map("first_seen_at")
+  lastSeenAt    DateTime  @default(now()) @map("last_seen_at")
+  isActive      Boolean   @default(true) @map("is_active")
+  applied       Boolean   @default(false)
+  appliedAt     DateTime? @map("applied_at")
+  willApply     Boolean   @default(true) @map("will_apply")
+  platform      String
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, externalId])
+  @@map("jobs")
+}
+
+model ScrapeRun {
+  id           Int       @id @default(autoincrement())
+  companyId    Int       @map("company_id")
+  startedAt    DateTime  @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
+  status       String
+  errorMessage String?   @map("error_message")
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@map("scrape_runs")
+}
