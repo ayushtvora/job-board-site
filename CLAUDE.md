@@ -42,7 +42,10 @@ jobs
   url           text
   location      text
   category      text             -- e.g. "Technology, Analytics & Research"
-  posted_date   date null        -- if the source site exposes it
+  posted_date   date null        -- if the source site exposes it; null means
+                                  -- it doesn't. The API/UI never show a blank
+                                  -- date though — see "Posted date fallback"
+                                  -- below.
   first_seen_at timestamptz      -- set on first insert
   last_seen_at  timestamptz      -- updated every time a scrape still finds it
   is_active     boolean          -- false once a scrape run no longer finds it
@@ -106,9 +109,17 @@ The main table, in column order:
   `jobs.platform` (e.g. "Workday") instead of the raw URL.
 - **Applied** and **Will Apply** render as checkboxes, editable inline; each
   edit fires the `PATCH /api/jobs/:id` call (see API contract below).
+- **Posted date fallback**: when `posted_date` is null, the displayed date
+  (and the `postedDate` field in the API response) falls back to
+  `first_seen_at` instead — the date the job was first scraped is the best
+  available proxy for when it was posted, so this column is never blank.
+  `posted_date` itself in the database is untouched by this; the fallback is
+  applied only where the value is displayed/returned.
 
-Default sort: `posted_date` descending (most recent first, nulls last), then
-`company` ascending, then `job_title` ascending.
+Default sort: **effective** posted date descending (most recent first — using
+the same `posted_date` / `first_seen_at` fallback as the displayed column, so
+sort order always matches what's shown), then `company` ascending, then
+`job_title` ascending.
 
 Default filter (applied automatically, no user action needed): show only rows
 where `is_active = true AND applied = false AND will_apply = true`. In other
@@ -158,6 +169,8 @@ Both routes live in the Next.js app (`web`), backed by Prisma.
     "willApply": true
   }
   ```
+  `postedDate` is always a date string, never `null` — see the posted date
+  fallback rule in the Default view section above.
 
 **`PATCH /api/jobs/:id`**
 - The *only* way `applied` and `will_apply` are ever modified — enforces the

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { serializeJob } from "@/lib/serializeJob";
+import { effectivePostedDate, serializeJob } from "@/lib/serializeJob";
 import { Prisma } from "@/generated/prisma/client";
 
 function parseBoolParam(value: string | null): boolean | undefined {
@@ -33,11 +33,18 @@ export async function GET(request: NextRequest) {
   const jobs = await prisma.job.findMany({
     where,
     include: { company: true },
-    orderBy: [
-      { postedDate: { sort: "desc", nulls: "last" } },
-      { company: { name: "asc" } },
-      { title: "asc" },
-    ],
+  });
+
+  // Sorted in JS rather than via Prisma's orderBy: the effective date (see
+  // effectivePostedDate) coalesces posted_date with first_seen_at, which
+  // isn't expressible as a plain column sort, and the row counts here are
+  // small enough that this costs nothing.
+  jobs.sort((a, b) => {
+    const dateDiff = effectivePostedDate(b).getTime() - effectivePostedDate(a).getTime();
+    if (dateDiff !== 0) return dateDiff;
+    const companyDiff = a.company.name.localeCompare(b.company.name);
+    if (companyDiff !== 0) return companyDiff;
+    return a.title.localeCompare(b.title);
   });
 
   return NextResponse.json(jobs.map(serializeJob));

@@ -10,7 +10,7 @@ type Job = {
   externalId: string;
   url: string;
   platform: string;
-  postedDate: string | null;
+  postedDate: string;
   applied: boolean;
   willApply: boolean;
 };
@@ -137,7 +137,7 @@ export default function Home() {
                       {job.platform}
                     </a>
                   </td>
-                  <td>{job.postedDate ?? "—"}</td>
+                  <td>{job.postedDate}</td>
                   <td>
                     <input
                       type="checkbox"
