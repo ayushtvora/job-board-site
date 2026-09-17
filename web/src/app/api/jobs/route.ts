@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { serializeJob } from "@/lib/serializeJob";
 import { Prisma } from "@/generated/prisma/client";
 
 function parseBoolParam(value: string | null): boolean | undefined {
@@ -39,19 +40,5 @@ export async function GET(request: NextRequest) {
     ],
   });
 
-  return NextResponse.json(
-    jobs.map((job) => ({
-      id: job.id,
-      company: job.company.name,
-      title: job.title,
-      externalId: job.externalId,
-      url: job.url,
-      platform: job.platform,
-      postedDate: job.postedDate
-        ? job.postedDate.toISOString().slice(0, 10)
-        : null,
-      applied: job.applied,
-      willApply: job.willApply,
-    })),
-  );
+  return NextResponse.json(jobs.map(serializeJob));
 }
