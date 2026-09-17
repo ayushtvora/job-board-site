@@ -4,6 +4,8 @@
   --banner-bg: #fdecea;
   --banner-border: #f5b5ac;
   --banner-text: #611a15;
+  --link: #0b57d0;
+  --link-visited: #7c3aed;
 
   display: flex;
   flex: 1;
@@ -74,6 +76,15 @@
   background: var(--row-hover);
 }
 
+.link {
+  color: var(--link);
+  text-decoration: underline;
+}
+
+.link:visited {
+  color: var(--link-visited);
+}
+
 @media (prefers-color-scheme: dark) {
   .page {
     --border: #2a2a2a;
@@ -81,6 +92,8 @@
     --banner-bg: #3a1512;
     --banner-border: #7a2c22;
     --banner-text: #f2b8b0;
+    --link: #8ab4f8;
+    --link-visited: #c58af9;
   }
 }
 

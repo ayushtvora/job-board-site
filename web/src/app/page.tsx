@@ -128,7 +128,12 @@ export default function Home() {
                   <td>{job.title}</td>
                   <td>{job.externalId}</td>
                   <td>
-                    <a href={job.url} target="_blank" rel="noopener noreferrer">
+                    <a
+                      href={job.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.link}
+                    >
                       {job.platform}
                     </a>
                   </td>
