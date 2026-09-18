@@ -11,6 +11,17 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  web:
+    build: ./web
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      NODE_ENV: ${NODE_ENV:-production}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+
   scraper:
     build: ./scraper
     restart: unless-stopped

@@ -247,10 +247,17 @@ for RBC**: a plain HTTP GET (`httpx`) is enough. Confirmed with plain `curl`
 ## Deployment
 
 - GitHub Actions runs on a **self-hosted runner installed on my personal
-  server** (no SSH secrets needed). On push to `main`, it runs Prisma
-  migrations against the production database (`npx prisma migrate deploy`),
-  then builds the Docker images and runs `docker compose up -d --build` on
-  the server.
+  server** (no SSH secrets needed). The workflow (`.github/workflows/deploy.yml`)
+  runs on push to `main`: `docker compose build`, then
+  `docker compose run --rm web npx prisma migrate deploy` (run *inside* the
+  freshly-built `web` image, not on the bare host — the server has no Node.js
+  installed, everything else on it is Docker containers, so migrations stay
+  containerized too rather than installing Node just for this), then
+  `docker compose up -d`.
+- The checkout step disables `actions/checkout`'s default clean
+  (`git clean -ffdx`) — that would otherwise delete the production `.env`
+  (gitignored, sitting in this same checked-out directory) on every run after
+  the first.
 - `docker-compose.yml` defines all three services plus a named volume for
   Postgres data.
 - Env vars (DB credentials, connection strings) via `.env` on the server, not
@@ -311,6 +318,7 @@ for RBC**: a plain HTTP GET (`httpx`) is enough. Confirmed with plain `curl`
       stable job ID (e.g. hash of title+location vs. slug from the URL) —
       not needed for RBC, which exposes a stable `jobId`, but still open for
       future companies that might not.
-- [ ] Build the RBC scraper module (`scrapers/rbc.py`) using the approach
+- [x] Build the RBC scraper module (`scrapers/rbc.py`) using the approach
       above, wire it into the runner + scheduler, and write the
-      `scrape_runs` row per CLAUDE.md's scraper behavior section.
+      `scrape_runs` row per CLAUDE.md's scraper behavior section — verified
+      end-to-end against the live site and local Postgres (see git history).
