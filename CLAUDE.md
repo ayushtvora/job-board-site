@@ -207,8 +207,11 @@ not host cron (per the architecture decision above).
 
 ## Current scope
 
-- Only company/source configured so far: **RBC**, Technology/Analytics/Research
-  jobs — https://jobs.rbc.com/ca/en/c/technology-analytics-research-jobs
+- Companies/sources configured so far:
+  - **RBC**, Technology/Analytics/Research jobs —
+    https://jobs.rbc.com/ca/en/c/technology-analytics-research-jobs
+  - **SOTI**, Mississauga HQ / Product Development jobs —
+    https://soti.wd3.myworkdayjobs.com/Careers/jobs?locations=023f9d25c4c11000bbfc52f5b4120000&EEB_-_Job_Categories_for_External_Site_Extended=267bdbcbbd671001697698c0843a0001
 - More companies and filters will be added later; scraper architecture should
   make adding a new company a matter of adding a new scraper module + a
   `companies` row, not restructuring shared code.
@@ -243,6 +246,48 @@ for RBC**: a plain HTTP GET (`httpx`) is enough. Confirmed with plain `curl`
   `applyUrl` — the real application link, which points at
   `*.wd3.myworkdayjobs.com` for every job seen. **`platform` = `"Workday"`**
   for RBC (answers the open question below).
+
+### SOTI scraping approach (investigated 2026-09-18)
+
+SOTI's careers site runs on Workday directly (`*.wd3.myworkdayjobs.com`) —
+unlike RBC's Phenom People site, so this isn't the same scraping approach,
+just the same downstream ATS. Workday exposes an undocumented but stable
+JSON API (`/wday/cxs/...`, "CXS" = Workday's candidate experience API) — no
+Playwright needed, plain HTTP calls with `httpx` are enough.
+
+- **List endpoint**: `POST https://soti.wd3.myworkdayjobs.com/wday/cxs/soti/Careers/jobs`
+  with a JSON body `{"appliedFacets": {...}, "limit": N, "offset": N, "searchText": ""}`.
+  `appliedFacets` keys are Workday facet parameter names (e.g. `locations`,
+  `EEB_-_Job_Categories_for_External_Site_Extended`); values are lists of
+  opaque facet IDs — the same IDs that appear as query params on the site's
+  own filtered URL (confirmed the two IDs in this scrape's URL resolve to
+  "Mississauga, Canada – Meadowvale Office (HQ)" and "Product Development"
+  respectively, via the facet metadata returned by the same endpoint called
+  with an empty `appliedFacets`).
+- **Pagination**: `limit`/`offset` in the request body, in contrast to RBC's
+  query-string pagination. Increment `offset` by `limit` until it reaches
+  the response's `total`.
+- **Fields available per job** from the list response: `title`,
+  `externalPath` (relative job URL), `locationsText`, `bulletFields[0]` (the
+  job requisition ID, e.g. `"R09972"` — use as `external_id`), and
+  `postedOn` — a relative string ("Posted 18 Days Ago"), **not** a usable
+  date.
+- **No per-job category or exact date** in the list response — unlike RBC's
+  embedded blob. Since this scraper's `appliedFacets` are fixed to one
+  category, `category` is hardcoded to that facet's label rather than read
+  per job.
+- **Exact posted date + canonical apply URL**: fetch each job's detail page,
+  `GET https://soti.wd3.myworkdayjobs.com/wday/cxs/soti/Careers<externalPath>`.
+  Its `jobPostingInfo.startDate` is a plain ISO date (e.g. `"2026-08-31"`) —
+  confirmed this lines up exactly with the list's relative "Posted N Days
+  Ago" text (N days before the date this was checked). `jobPostingInfo.externalUrl`
+  is the canonical apply URL (same domain, no separate ATS redirect — unlike
+  RBC, SOTI's own careers site *is* the Workday instance). `jobReqId` there
+  matches `bulletFields[0]` from the list response. **`platform` =
+  `"Workday"`** for SOTI.
+- This means one extra HTTP request per job per run (~12 jobs currently for
+  this filter combination) — acceptable at this volume and cadence
+  (once/day).
 
 ## Deployment
 
