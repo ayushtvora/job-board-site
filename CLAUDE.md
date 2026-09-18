@@ -323,13 +323,9 @@ for RBC**: a plain HTTP GET (`httpx`) is enough. Confirmed with plain `curl`
 - [x] Set up Cloudflare Tunnel public hostname for the deployed `web` service
       — live at `jobs.ayushtvora.com` (routed to `localhost:3001` via the
       existing host-networked `cloudflared` container on the server).
-- [ ] **Set up Cloudflare Access in front of `jobs.ayushtvora.com`** — the
-      hostname above is reachable by anyone right now, not just me; this is
-      the auth gate the top of this file assumes is already in place. Plan:
-      add a Google login method in Zero Trust (needs an OAuth client from
-      Google Cloud Console) and an Access application policy restricting to
-      my own email. Deferred for now, not urgent but shouldn't stay open long
-      since the job data is otherwise public.
+- [x] Set up Cloudflare Access in front of `jobs.ayushtvora.com` — verified
+      the hostname now 302-redirects to the Cloudflare Access login page
+      instead of serving the app directly.
 - [ ] Decide the exact deterministic external-ID scheme for sites without a
       stable job ID (e.g. hash of title+location vs. slug from the URL) —
       not needed for RBC, which exposes a stable `jobId`, but still open for
