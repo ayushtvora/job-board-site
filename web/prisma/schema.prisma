@@ -55,3 +55,18 @@ model ScrapeRun {
 
   @@map("scrape_runs")
 }
+
+// On-demand scan requests from the "Run Job Scan" button. The web app only
+// inserts a row here; the scraper's own scheduler polls for pending rows and
+// runs the scan — web and scraper still never call each other directly, only
+// through Postgres, per the architecture in CLAUDE.md.
+model ScrapeRequest {
+  id           Int       @id @default(autoincrement())
+  requestedAt  DateTime  @default(now()) @map("requested_at")
+  startedAt    DateTime? @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
+  status       String    @default("pending") // pending | running | done | error
+  errorMessage String?   @map("error_message")
+
+  @@map("scrape_requests")
+}

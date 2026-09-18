@@ -75,3 +75,44 @@ def upsert_jobs_and_cleanup(conn: psycopg.Connection, company_slug: str, jobs: l
             """,
             {"company_id": company_slug, "seen_ids": seen_ids},
         )
+
+
+def claim_pending_scrape_request(conn: psycopg.Connection) -> int | None:
+    """Atomically claim the oldest pending on-demand scan request, if any.
+
+    FOR UPDATE SKIP LOCKED means a request already claimed by an overlapping
+    poll can't be claimed twice.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE scrape_requests
+            SET status = 'running', started_at = now()
+            WHERE id = (
+                SELECT id FROM scrape_requests
+                WHERE status = 'pending'
+                ORDER BY requested_at
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
+            )
+            RETURNING id
+            """
+        )
+        row = cur.fetchone()
+    conn.commit()
+    return row[0] if row else None
+
+
+def finish_scrape_request(
+    conn: psycopg.Connection, request_id: int, status: str, error_message: str | None
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE scrape_requests
+            SET status = %s, error_message = %s, finished_at = now()
+            WHERE id = %s
+            """,
+            (status, error_message, request_id),
+        )
+    conn.commit()

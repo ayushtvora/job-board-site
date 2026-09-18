@@ -45,6 +45,34 @@
   font-size: 0.85em;
 }
 
+.scanRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.scanButton {
+  border: 1px solid var(--link);
+  background: var(--link);
+  color: #fff;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 0.9em;
+  font-weight: 600;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.scanButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.scanError {
+  color: var(--banner-text);
+  font-size: 0.85em;
+}
+
 .showHidden {
   display: flex;
   align-items: center;

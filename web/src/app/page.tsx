@@ -22,6 +22,16 @@ type ScrapeStatus = {
   finishedAt: string | null;
 };
 
+type ScrapeRequest = {
+  id: number;
+  status: "pending" | "running" | "done" | "error";
+  errorMessage: string | null;
+  requestedAt: string;
+  finishedAt: string | null;
+};
+
+const SCAN_POLL_INTERVAL_MS = 3000;
+
 export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +39,8 @@ export default function Home() {
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
   const [scrapeErrors, setScrapeErrors] = useState<ScrapeStatus[]>([]);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [scanRequest, setScanRequest] = useState<ScrapeRequest | null>(null);
+  const scanInFlight = scanRequest?.status === "pending" || scanRequest?.status === "running";
 
   const loadJobs = useCallback(async () => {
     setLoading(true);
@@ -38,17 +50,52 @@ export default function Home() {
     setLoading(false);
   }, [showHidden]);
 
+  const loadScrapeStatus = useCallback(async () => {
+    const res = await fetch("/api/scrape-status");
+    const data: ScrapeStatus[] = await res.json();
+    setScrapeErrors(data.filter((run) => run.status === "error"));
+  }, []);
+
   useEffect(() => {
     loadJobs();
   }, [loadJobs]);
 
   useEffect(() => {
-    fetch("/api/scrape-status")
+    loadScrapeStatus();
+  }, [loadScrapeStatus]);
+
+  // Pick up an already in-flight scan on page load, so refreshing the page
+  // mid-scan still shows "Scanning…" instead of losing track of it.
+  useEffect(() => {
+    fetch("/api/scrape-requests")
       .then((res) => res.json())
-      .then((data: ScrapeStatus[]) => {
-        setScrapeErrors(data.filter((run) => run.status === "error"));
+      .then((data: ScrapeRequest | null) => {
+        if (data && (data.status === "pending" || data.status === "running")) {
+          setScanRequest(data);
+        }
       });
   }, []);
+
+  useEffect(() => {
+    if (!scanInFlight) return;
+
+    const interval = setInterval(async () => {
+      const res = await fetch("/api/scrape-requests");
+      const data: ScrapeRequest | null = await res.json();
+      setScanRequest(data);
+      if (data && data.status !== "pending" && data.status !== "running") {
+        await Promise.all([loadJobs(), loadScrapeStatus()]);
+      }
+    }, SCAN_POLL_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [scanInFlight, loadJobs, loadScrapeStatus]);
+
+  async function startScan() {
+    const res = await fetch("/api/scrape-requests", { method: "POST" });
+    const data: ScrapeRequest = await res.json();
+    setScanRequest(data);
+  }
 
   async function updateJob(id: number, patch: Partial<Pick<Job, "applied" | "willApply">>) {
     setSavingIds((prev) => new Set(prev).add(id));
@@ -94,6 +141,22 @@ export default function Home() {
             </button>
           </div>
         )}
+
+        <div className={styles.scanRow}>
+          <button
+            type="button"
+            className={styles.scanButton}
+            onClick={startScan}
+            disabled={scanInFlight}
+          >
+            {scanInFlight ? "Scanning…" : "Run Job Scan"}
+          </button>
+          {scanRequest?.status === "error" && (
+            <span className={styles.scanError}>
+              Last scan failed{scanRequest.errorMessage ? `: ${scanRequest.errorMessage}` : ""}
+            </span>
+          )}
+        </div>
 
         <label className={styles.showHidden}>
           <input
