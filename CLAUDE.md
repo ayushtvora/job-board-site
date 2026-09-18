@@ -311,7 +311,12 @@ for RBC**: a plain HTTP GET (`httpx`) is enough. Confirmed with plain `curl`
 - [x] Investigate RBC's careers site structure — see "RBC scraping approach"
       under Current scope above.
 - [x] Scaffold Next.js app, Prisma schema, docker-compose.yml.
-- [ ] Set up self-hosted GitHub Actions runner on the personal server.
+- [x] Set up self-hosted GitHub Actions runner on the personal server —
+      installed as a systemd service (`~/actions-runner`), verified with two
+      real deploys end-to-end (including catching and fixing a real bug in
+      the scraper's scheduler startup). The app is up on the server at
+      `localhost:3000` there; it isn't reachable at a public URL yet — that's
+      the Cloudflare Tunnel/Access item below.
 - [x] Confirm RBC's ATS platform name to populate `jobs.platform` — Workday.
 - [ ] Set up Cloudflare Tunnel + Access in front of the deployed `web` service.
 - [ ] Decide the exact deterministic external-ID scheme for sites without a
