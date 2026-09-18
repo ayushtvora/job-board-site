@@ -30,8 +30,9 @@ def main() -> None:
     tz = ZoneInfo(os.environ.get("TZ", "UTC"))
     scheduler = BlockingScheduler(timezone=tz)
     scheduler.add_job(run_all_scrapers, CronTrigger(hour=6, minute=0, timezone=tz))
-    next_run = scheduler.get_jobs()[0].next_run_time
-    logger.info("Scheduler started (daily at 6:00 %s) — next run at %s", tz, next_run)
+    # next_run_time isn't populated on the Job until the scheduler actually
+    # starts, so don't try to read it here — just log the static schedule.
+    logger.info("Scheduler starting (daily at 6:00 %s)", tz)
     scheduler.start()
 
 
