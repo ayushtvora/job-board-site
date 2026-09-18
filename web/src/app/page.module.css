@@ -6,6 +6,7 @@
   --banner-text: #611a15;
   --link: #0b57d0;
   --link-visited: #7c3aed;
+  --muted-text: #666;
 
   display: flex;
   flex: 1;
@@ -68,6 +69,11 @@
   cursor: default;
 }
 
+.lastRun {
+  color: var(--muted-text);
+  font-size: 0.85em;
+}
+
 .scanError {
   color: var(--banner-text);
   font-size: 0.85em;
@@ -122,6 +128,7 @@
     --banner-text: #f2b8b0;
     --link: #8ab4f8;
     --link-visited: #c58af9;
+    --muted-text: #999;
   }
 }
 

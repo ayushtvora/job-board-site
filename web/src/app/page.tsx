@@ -37,7 +37,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [showHidden, setShowHidden] = useState(false);
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
-  const [scrapeErrors, setScrapeErrors] = useState<ScrapeStatus[]>([]);
+  const [scrapeStatuses, setScrapeStatuses] = useState<ScrapeStatus[]>([]);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [scanRequest, setScanRequest] = useState<ScrapeRequest | null>(null);
   const scanInFlight = scanRequest?.status === "pending" || scanRequest?.status === "running";
@@ -53,7 +53,7 @@ export default function Home() {
   const loadScrapeStatus = useCallback(async () => {
     const res = await fetch("/api/scrape-status");
     const data: ScrapeStatus[] = await res.json();
-    setScrapeErrors(data.filter((run) => run.status === "error"));
+    setScrapeStatuses(data);
   }, []);
 
   useEffect(() => {
@@ -90,6 +90,17 @@ export default function Home() {
 
     return () => clearInterval(interval);
   }, [scanInFlight, loadJobs, loadScrapeStatus]);
+
+  const scrapeErrors = scrapeStatuses.filter((run) => run.status === "error");
+
+  // The most recent finishedAt across all companies' last scrape_runs row —
+  // reflects the last time any scan completed, whether kicked off by the
+  // button or the scraper's own daily 6am schedule.
+  const lastRunAt = scrapeStatuses.reduce<string | null>((latest, run) => {
+    if (!run.finishedAt) return latest;
+    if (!latest || run.finishedAt > latest) return run.finishedAt;
+    return latest;
+  }, null);
 
   async function startScan() {
     const res = await fetch("/api/scrape-requests", { method: "POST" });
@@ -151,6 +162,9 @@ export default function Home() {
           >
             {scanInFlight ? "Scanning…" : "Run Job Scan"}
           </button>
+          <span className={styles.lastRun}>
+            Last run: {lastRunAt ? new Date(lastRunAt).toLocaleString() : "never"}
+          </span>
           {scanRequest?.status === "error" && (
             <span className={styles.scanError}>
               Last scan failed{scanRequest.errorMessage ? `: ${scanRequest.errorMessage}` : ""}
