@@ -213,6 +213,13 @@ not host cron (per the architecture decision above).
   - **SOTI**, Mississauga HQ / Product Development jobs —
     https://soti.wd3.myworkdayjobs.com/Careers/jobs?locations=023f9d25c4c11000bbfc52f5b4120000&EEB_-_Job_Categories_for_External_Site_Extended=267bdbcbbd671001697698c0843a0001
   - **EA**, Canada / Software Development jobs — https://jobs.ea.com/en_US/careers
+  - **BMO**, Canada / Technology jobs — https://jobs.bmo.com/ca/en/search-results
+  - **CIBC**, Canada / Information Technology jobs —
+    https://cibc.wd3.myworkdayjobs.com/search?jobFamilyGroup=4bbe6c74e8a70126f29430a881012510&Country=a30a87ed25634629aa6c3958aa2b91ea
+  - **TD**, Canada / Technology Solutions jobs —
+    https://td.wd3.myworkdayjobs.com/en-US/TD_Bank_Careers?jobFamilyGroup=de769652963501f2001247b507040dac&locationCountry=a30a87ed25634629aa6c3958aa2b91ea
+  - **Scotiabank**, IT & Digital Banking Jobs (no separate country filter) —
+    https://jobs.scotiabank.com/go/IT-&-Digital-Banking-Jobs/2298017/
 - More companies and filters will be added later; scraper architecture should
   make adding a new company a matter of adding a new scraper module + a
   `companies` row, not restructuring shared code.
@@ -333,6 +340,69 @@ HTML listing, so it's parsed with BeautifulSoup (`bs4`, added to
   sanctioned behavior per the posted-date-fallback rule (UI falls back to
   `first_seen_at`), not a workaround.
 - **`platform` = `"Avature"`** for EA.
+
+### BMO, CIBC, TD, Scotiabank scraping approach (investigated 2026-09-18)
+
+Added four more companies in one pass, each landing on a platform already
+covered by an existing scraper except Scotiabank:
+
+- **BMO** (`scrapers/bmo.py`) — Phenom People, same as RBC (`phApp.ddo`
+  blob). Two differences from RBC's scraper:
+  - BMO's `/ca/en/` site section is Canada-only already (its own `country`
+    facet reports 100% "Canada"), so "Country: Canada" needs no explicit
+    filter.
+  - Category filtering is a plain human-readable query param,
+    `?category=Technology` (matches the facet label exactly, confirmed by
+    the totalHits dropping to that facet's own count) — no opaque ID, unlike
+    Workday. **Pagination quirk**: combining RBC's `&s=1` param with
+    `category=...` here silently drops the category filter back to the
+    unfiltered full set. Omitting `s` and paginating with `from=N` alone
+    works correctly with the filter applied — confirmed via distinct,
+    correctly-categorized jobs on later pages. `platform = "Workday"`,
+    same as RBC (BMO's `applyUrl` also points at `*.wd3.myworkdayjobs.com`).
+- **CIBC** (`scrapers/cibc.py`) and **TD** (`scrapers/td.py`) — Workday, same
+  approach as SOTI. Facet parameter names differ per tenant (CIBC:
+  `jobFamilyGroup` + `Country`; TD: `jobFamilyGroup` + `locationCountry`,
+  the latter nested under a `locationMainGroup` facet group) but were
+  confirmed against each site's own facet metadata, same as SOTI's. Notably,
+  the Canada country-facet ID (`a30a87ed25634629aa6c3958aa2b91ea`) is
+  identical across SOTI, CIBC, and TD — Workday appears to reuse common
+  reference IDs (at least for countries) across independent tenants, though
+  each tenant still needs its own facet *parameter name* confirmed
+  separately.
+  - TD's `bulletFields` includes a second element beyond the requisition ID
+    — its "Job Family" (a finer sub-category under "Job Category", e.g.
+    "Engineering", confirmed against TD's own `jobFamily` facet values). Used
+    directly as `category` instead of hardcoding "Technology Solutions",
+    since it's real per-job data. CIBC has no such second field, so its
+    scraper hardcodes "Information Technology" like SOTI does.
+  - **Bug found and fixed while building these**: the original SOTI/CIBC/TD
+    scrapers re-read `total` from every page's response to decide when to
+    stop paginating. TD's API reports `total: 0` on every page after the
+    first (confirmed directly), which made `offset >= total` trip
+    immediately and silently truncated results to just the first two pages
+    (40 of TD's 95 matching jobs). Fixed in all three Workday scrapers to
+    only trust `total` from the first page's response.
+- **Scotiabank** (`scrapers/scotiabank.py`) — a fourth ATS platform: SAP
+  SuccessFactors (Jobs2Web career site layer). Plain server-rendered HTML
+  table, no session/JS needed, parsed with BeautifulSoup.
+  - The given URL (`/go/IT-&-Digital-Banking-Jobs/2298017/`) is itself the
+    category-specific landing page (Scotiabank's own "Technology" filter,
+    per the request) — not a generic search with query-string facets. Only
+    "Technology" was requested for Scotiabank, with no separate country
+    filter (unlike BMO/CIBC/TD), so the scraper takes this page as-is,
+    whatever countries happen to be in it.
+  - **Pagination** is a URL *path segment*, not a query param, in steps of
+    the page size (25): `.../2298017/0/`, `.../2298017/25/`, etc. — `/0/` is
+    confirmed equivalent to the bare category URL (both report "Page 1"),
+    so the scraper always includes the offset segment uniformly.
+  - No per-job category is shown (the whole page is one category already),
+    so `category` is hardcoded to the page's own label ("IT & Digital
+    Banking Jobs"), same reasoning as the Workday scrapers.
+  - Posted date is a plain human-readable string per row (e.g. "Sep 18,
+    2026"), parsed directly — no RSS-style partial-coverage workaround
+    needed here, unlike EA.
+  - **`platform` = `"SuccessFactors"`** for Scotiabank.
 
 ## Deployment
 

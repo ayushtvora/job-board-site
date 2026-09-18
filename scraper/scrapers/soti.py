@@ -69,7 +69,11 @@ def scrape() -> list[NormalizedJob]:
             )
             response.raise_for_status()
             payload = response.json()
-            total = payload["total"]
+            # Only trust `total` from the first page — confirmed some Workday
+            # tenants (e.g. TD) report it as 0 on later pages, which would
+            # otherwise make `offset >= total` trip early and truncate results.
+            if total is None:
+                total = payload["total"]
             postings = payload["jobPostings"]
             if not postings:
                 break
