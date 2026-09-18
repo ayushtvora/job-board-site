@@ -315,7 +315,9 @@ for RBC**: a plain HTTP GET (`httpx`) is enough. Confirmed with plain `curl`
       installed as a systemd service (`~/actions-runner`), verified with two
       real deploys end-to-end (including catching and fixing a real bug in
       the scraper's scheduler startup). The app is up on the server at
-      `localhost:3000` there; it isn't reachable at a public URL yet — that's
+      `localhost:3001` there (host port 3001 → container port 3000 — 3000
+      was already taken by something else on the server); it isn't
+      reachable at a public URL yet — that's
       the Cloudflare Tunnel/Access item below.
 - [x] Confirm RBC's ATS platform name to populate `jobs.platform` — Workday.
 - [ ] Set up Cloudflare Tunnel + Access in front of the deployed `web` service.
