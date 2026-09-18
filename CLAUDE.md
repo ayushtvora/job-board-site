@@ -212,6 +212,7 @@ not host cron (per the architecture decision above).
     https://jobs.rbc.com/ca/en/c/technology-analytics-research-jobs
   - **SOTI**, Mississauga HQ / Product Development jobs —
     https://soti.wd3.myworkdayjobs.com/Careers/jobs?locations=023f9d25c4c11000bbfc52f5b4120000&EEB_-_Job_Categories_for_External_Site_Extended=267bdbcbbd671001697698c0843a0001
+  - **EA**, Canada / Software Development jobs — https://jobs.ea.com/en_US/careers
 - More companies and filters will be added later; scraper architecture should
   make adding a new company a matter of adding a new scraper module + a
   `companies` row, not restructuring shared code.
@@ -288,6 +289,50 @@ Playwright needed, plain HTTP calls with `httpx` are enough.
 - This means one extra HTTP request per job per run (~12 jobs currently for
   this filter combination) — acceptable at this volume and cadence
   (once/day).
+
+### EA scraping approach (investigated 2026-09-18)
+
+EA's careers site (`jobs.ea.com`) runs on Avature, a third ATS distinct from
+both RBC's (Phenom) and SOTI's (Workday). Unlike either of those, job data
+isn't embedded as one parseable JSON blob — this is a plain server-rendered
+HTML listing, so it's parsed with BeautifulSoup (`bs4`, added to
+`requirements.txt`) instead.
+
+- The filter form's "Country" and "Job Category" fields are Avature
+  "dataset" fields backed by an autocomplete API — their option values are
+  opaque numeric IDs not present anywhere in the static HTML (they're
+  fetched as you type). Found these by driving the real filter UI with
+  Playwright (installed temporarily for this investigation, not added to
+  `requirements.txt` since the scraper itself doesn't need a browser) and
+  capturing the request the filter form fires on submit:
+  `8171=10577` is Country=Canada, `4536=8301` is Job Category=Software
+  Development.
+- The resulting listing URL is a plain GET, no session/cookies required:
+  `https://jobs.ea.com/en_US/careers/Home/?8171=[10577]&8171_format=5683&4536=[8301]&4536_format=3019&listFilterMode=1`.
+  The `_format` values are fixed companions to each field, not independently
+  meaningful. **Pagination**: `jobOffset`, in steps of 20 — the site
+  hard-caps the actual page size at 20 regardless of what `jobRecordsPerPage`
+  requests (tried up to 200, still got 20 back).
+- **Fields available per job** from the listing: title + detail URL
+  (`.article__header__text__title a`), primary location
+  (`.list-item-location`), and a numeric role ID that appears both as the
+  URL's trailing path segment and as `.list-item-id` ("Role ID <n>") — used
+  as `external_id`.
+- **No per-job category or posted date** anywhere in the listing or detail
+  page (checked both). Since this scraper's query is fixed to one category,
+  `category` is hardcoded to that facet's label, same reasoning as SOTI.
+- **Posted date**: EA also publishes an RSS feed at the same path
+  (`Home/feed/`) that accepts the identical filter params and includes a
+  real `pubDate` per job — but confirmed it always returns only its 20
+  *most-recently-posted* matches for the given filter, completely ignoring
+  `jobRecordsPerPage`/`jobOffset` (tried several values, got the same 20
+  items back every time, in a different order/set than the default listing
+  sort). So it's a partial, best-effort source: the scraper builds an
+  `external_id -> pubDate` lookup from it once per run, and jobs outside
+  that newest-20 slice just get `posted_date = None` — which is the
+  sanctioned behavior per the posted-date-fallback rule (UI falls back to
+  `first_seen_at`), not a workaround.
+- **`platform` = `"Avature"`** for EA.
 
 ## Deployment
 
