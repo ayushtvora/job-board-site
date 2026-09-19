@@ -220,6 +220,10 @@ not host cron (per the architecture decision above).
     https://td.wd3.myworkdayjobs.com/en-US/TD_Bank_Careers?jobFamilyGroup=de769652963501f2001247b507040dac&locationCountry=a30a87ed25634629aa6c3958aa2b91ea
   - **Scotiabank**, IT & Digital Banking Jobs (no separate country filter) —
     https://jobs.scotiabank.com/go/IT-&-Digital-Banking-Jobs/2298017/
+  - **Manulife**, Canada / Information Technology jobs — scraped from their
+    Workday tenant (`manulife.wd3.myworkdayjobs.com/MFCJH_Jobs`) rather than
+    the requested careers.manulife.com page, which is WAF-blocked; see
+    "Manulife scraping approach" below.
 - More companies and filters will be added later; scraper architecture should
   make adding a new company a matter of adding a new scraper module + a
   `companies` row, not restructuring shared code.
@@ -403,6 +407,45 @@ covered by an existing scraper except Scotiabank:
     2026"), parsed directly — no RSS-style partial-coverage workaround
     needed here, unlike EA.
   - **`platform` = `"SuccessFactors"`** for Scotiabank.
+
+### Manulife scraping approach (investigated 2026-09-19)
+
+**careers.manulife.com is unscrapeable — don't retry it without new
+information.** It's a Phenom People front-end (same `/{locale}/c/<category>-jobs`
+URL shape as RBC), but Akamai returns an immediate 403 "Access Denied" block
+page to every automated client tried: plain HTTP, full browser-like headers,
+and a real headless Chromium — from three different networks, including the
+personal server this scraper actually runs from. Every path on the domain is
+blocked, including the site root and `manulife.com` itself. It's a flat WAF
+block, not a JS challenge, so there's no challenge for a scraper to solve and
+no amount of header/browser tuning helps.
+
+Instead, `scrapers/manulife.py` scrapes **Manulife's Workday tenant
+directly** — Workday is the system of record behind that Phenom front-end
+(as it is for RBC and BMO, whose apply links also point at Workday), and its
+API isn't behind the WAF.
+
+- Tenant/site: `manulife.wd3.myworkdayjobs.com/MFCJH_Jobs` — a combined
+  Manulife/John Hancock careers site. The site ID is not guessable (a dozen
+  plausible names all 404'd); it was found from a real apply link to this
+  tenant published on a third-party job aggregator.
+- Facet parameters are `jobFamilyGroup` and `Location_Country`, confirmed
+  against the tenant's own facet metadata: `838ae04677e543c2a0a85dfd1cab030a`
+  = "Information Technology Group" (33 Canadian jobs), and the usual shared
+  `a30a87ed25634629aa6c3958aa2b91ea` = "Canada".
+- **Caveat on the category mapping**: because the Phenom site is unreachable,
+  there's no way to verify that its "technology-jobs" category contains
+  exactly the same jobs as Workday's "Information Technology Group". It's the
+  obvious direct match, but adjacent Workday groups exist that a "technology"
+  bucket *might* also include — most plausibly "Advanced Analytics - AI
+  Group" (10 Canadian jobs). Adding it would be a one-line change to
+  `CATEGORY_FACET_ID`'s list in the scraper if that's ever wanted.
+- `bulletFields` is `[reqId, city]` here (the second element is a location,
+  not a category like TD's), so `category` is hardcoded to the facet label.
+- **Location comes from the detail endpoint**, unlike the other Workday
+  scrapers: Manulife has many multi-location postings whose listing
+  `locationsText` is just a placeholder like "2 Locations" / "50 Locations",
+  while the detail endpoint's `location` is always a real place name.
 
 ## Deployment
 
