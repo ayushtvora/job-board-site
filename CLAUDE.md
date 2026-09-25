@@ -224,6 +224,126 @@ not host cron (per the architecture decision above).
     Workday tenant (`manulife.wd3.myworkdayjobs.com/MFCJH_Jobs`) rather than
     the requested careers.manulife.com page, which is WAF-blocked; see
     "Manulife scraping approach" below.
+  - **Liberty Mutual**, Canada / Technology jobs — investigated, platform
+    confirmed (Eightfold), but currently has **zero** Canada postings; see
+    "Liberty Mutual scraping approach" below.
+  - **Blizzard**, Canada / Engineering & Technology jobs — investigated,
+    platform confirmed, but currently has **zero** Canada postings; see
+    "Blizzard scraping approach" below.
+  - **Riot Games**, Canada / Engineering jobs — investigated, platform
+    confirmed (Greenhouse), but currently has **zero** Canada postings; see
+    "Riot Games scraping approach" below.
+  - **Nvidia**, Canada / Engineering jobs (Workday `jobFamilyGroup`) —
+    https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite — see
+    "Nvidia scraping approach" below.
+  - **UBC**, Canada (Vancouver/Okanagan campuses) / M&P Information Systems &
+    Tech jobs (Workday `jobFamily`) —
+    https://ubc.wd10.myworkdayjobs.com/ubcstaffjobs — see "UBC scraping
+    approach" below.
+  - **Reddit**, Canada / Engineering department jobs (Greenhouse) —
+    https://job-boards.greenhouse.io/reddit — see "Reddit scraping approach"
+    below.
+  - **ATS Corporation** (atsautomation.com), Canada / Engineering jobs —
+    scraped from its SuccessFactors Jobs2Web site `jobs.atsautomation.com`
+    (unblocked 2026-09-25); see "ATS Corporation and Eclipse Automation,
+    unblocked" below. (The original 2026-09-19 notes further down describe
+    the dead end that came before.)
+  - **Intel**, Canada / Software Engineering jobs (Workday `jobFamilyGroup`)
+    — https://intel.wd1.myworkdayjobs.com/External — see "Intel scraping
+    approach" below.
+  - **Oracle**, Canada / Product and Research jobs (Oracle Recruiting Cloud)
+    — https://careers.oracle.com/en/sites/jobsearch — see "Oracle scraping
+    approach" below.
+  - **Spotify**, Canada / Engineering jobs (Lever) —
+    https://jobs.lever.co/spotify — see "Spotify scraping approach" below.
+  - **Adobe**, Canada / Engineering and Product jobs (Workday apply backend
+    via Phenom front-end) — https://careers.adobe.com/us/en/search-results —
+    see "Adobe scraping approach" below.
+  - **Sony**, Canada / Product Development – Software jobs (Workday, via
+    sonyjobs.com's embedded Workday iframe) —
+    https://sonyglobal.wd1.myworkdayjobs.com/SonyGlobalCareers — see "Sony
+    scraping approach" below.
+  - **AMD** — investigation blocked, not scraper-ready: iCIMS backend
+    returns an AWS WAF captcha challenge to every automated request; see
+    "AMD scraping approach" below.
+  - **Uber** — investigation blocked, not scraper-ready: custom in-house
+    app with an app-level CSRF gate on its job search API; see "Uber
+    scraping approach" below.
+  - **Airbnb**, Canada / Software Engineering jobs (Greenhouse) —
+    https://boards-api.greenhouse.io/v1/boards/airbnb — see "Airbnb, Databricks,
+    Stripe scraping approach" below. Currently 0 jobs match Canada +
+    Software Engineering simultaneously.
+  - **Databricks**, Canada / Engineering jobs (Greenhouse) —
+    https://boards-api.greenhouse.io/v1/boards/databricks — see "Airbnb,
+    Databricks, Stripe scraping approach" below.
+  - **Stripe**, Canada / Engineering jobs (Greenhouse, heuristic dept match)
+    — https://boards-api.greenhouse.io/v1/boards/stripe — see "Airbnb,
+    Databricks, Stripe scraping approach" below.
+  - **SAP**, Canada / Software-Design and Development jobs (SAP
+    SuccessFactors) — https://jobs.sap.com — see "SAP scraping approach"
+    below.
+  - **Snowflake**, Canada / Engineering jobs (Phenom front-end, Ashby is the
+    real ATS) — https://careers.snowflake.com/us/en/search-results?category=Engineering
+    — see "Snowflake scraping approach" below.
+  - **Metrolinx**, Canada (all jobs are Canada already) / IT-adjacent roles
+    (Oracle Fusion Cloud Recruiting) —
+    https://www.metrolinx.com/en/about-us/careers — see "Metrolinx scraping
+    approach" below.
+  - **Eclipse Automation**, Canada / software & engineering roles
+    (Dayforce) — unblocked 2026-09-25 once Dayforce's maintenance ended;
+    see "ATS Corporation and Eclipse Automation, unblocked" below.
+  - **Meta** — investigated; scrapable in principle but would require a
+    full Playwright browser session on every scrape run (not lightweight
+    HTTP like every other company here) because its GraphQL API requires
+    per-session anti-automation tokens; not yet built. See "Meta scraping
+    approach" below.
+  - **Amazon**, Canada / Software Development jobs (custom in-house JSON
+    API) — https://www.amazon.jobs/en/search.json — see "Amazon scraping
+    approach" below.
+  - **Google**, Canada / Software Engineer jobs (custom in-house,
+    server-rendered, free-text relevance search) —
+    https://www.google.com/about/careers/applications/jobs/results — see
+    "Google scraping approach" below.
+  - **Apple**, Canada / Software and Services team jobs (custom in-house) —
+    https://jobs.apple.com/en-us/search?location=canada-CANC — see "Apple
+    scraping approach" below.
+  - **Microsoft**, Canada / Software Engineering department jobs
+    (Eightfold) — https://apply.careers.microsoft.com — see "Microsoft
+    scraping approach" below.
+  - **IBM**, Canada / Software Engineering jobs (IBM's own Elasticsearch
+    search index; Avature is the underlying application system) —
+    https://www.ibm.com/careers/search — see "IBM scraping approach" below.
+  - **Canonical**, Canada-adjacent / Engineering jobs (Greenhouse; see
+    caveats on Canada and category matching below) —
+    https://boards-api.greenhouse.io/v1/boards/canonical — see "Canonical
+    scraping approach" below.
+  - **Shopify**, Canada/Americas-remote / Engineering jobs (Ashby data via
+    the careers page's React Router loader) — https://www.shopify.com/careers
+    — see "Shopify, Thomson Reuters, Salesforce, Autodesk, Sun Life scraping
+    approach" below.
+  - **Thomson Reuters**, Canada / Technology Careers jobs (Workday) —
+    https://thomsonreuters.wd5.myworkdayjobs.com/External_Career_Site
+  - **Salesforce**, Canada / Software Engineering jobs (Workday) —
+    https://salesforce.wd12.myworkdayjobs.com/External_Career_Site
+  - **Sun Life**, Canada / IT jobs (Workday) —
+    https://sunlife.wd3.myworkdayjobs.com/Experienced-Jobs
+  - **Autodesk** — Workday tenant confirmed (`autodesk.wd1.myworkdayjobs.com/Ext`)
+    but the site was in a Workday outage throughout investigation (retried
+    several times over the session); not yet scraper-ready.
+  - Fourth wave, batches 2–6 (all Canada-scoped, tech/engineering
+    categories; see "Fourth wave, batches 2–6 scraping approach" below for
+    per-company details): **Cohere** (Ashby), **Wealthsimple** (Ashby),
+    **Faire** (Greenhouse), **Cloudflare** (Greenhouse), **Dropbox**
+    (Greenhouse), **Pinterest** (Greenhouse), **Instacart** (Greenhouse),
+    **Coinbase** (Greenhouse), **National Bank** (Avature), **Intact**
+    (Workday), **Canada Life** (SuccessFactors Jobs2Web), **Questrade**
+    (Dayforce), **Interac** (Workday), **Rogers** (SuccessFactors
+    Jobs2Web), **Bell** (Phenom → SuccessFactors), **TELUS**
+    (SuccessFactors Jobs2Web — currently zero tech postings), **Ubisoft**
+    (SmartRecruiters), **Clio** (Workday), **1Password** (Ashby),
+    **Kinaxis** (iCIMS via Jibe), **OpenText** (Phenom → SuccessFactors),
+    **Geotab** (Greenhouse), **D2L** (Greenhouse), **Arctic Wolf**
+    (Workday), **Workday** (Workday).
 - More companies and filters will be added later; scraper architecture should
   make adding a new company a matter of adding a new scraper module + a
   `companies` row, not restructuring shared code.
@@ -446,6 +566,692 @@ API isn't behind the WAF.
   scrapers: Manulife has many multi-location postings whose listing
   `locationsText` is just a placeholder like "2 Locations" / "50 Locations",
   while the detail endpoint's `location` is always a real place name.
+
+### Liberty Mutual, Blizzard, Riot Games, Nvidia, UBC, Reddit, ATS Corporation scraping approach (investigated 2026-09-19)
+
+Batch investigation for a second wave of companies. Three of these
+(Liberty Mutual, Blizzard, Riot Games) have their platform/API fully
+confirmed but currently have **zero** Canada job postings — not a scraping
+failure, confirmed by testing the filter against a known-populated value
+(Liberty Mutual) or the full unfiltered facet aggregation (Blizzard, Riot).
+Scraper modules for these should still be written per CLAUDE.md's shared
+interface, they'll just return an empty list most of the time until Canada
+roles open up.
+
+- **Liberty Mutual** — real URL `https://searchjobs.libertymutualgroup.com/careers`.
+  Platform: **Eightfold** (confirmed via `X-EF-NS`/`X-EF-CID` response headers,
+  `/gen/js/ef-*.js` assets). Public JSON API:
+  `GET https://searchjobs.libertymutualgroup.com/api/apply/v2/jobs?domain=libertymutual.com&start=0&num=<N>&query=`
+  — note `domain` must be `libertymutual.com`, not `libertymutualgroup.com`
+  (the latter silently returns a generic 404-shell). Pagination: `start`/`num`
+  query params. Filtering: `location=` and `department=` query params are
+  real and confirmed working (`location=Boston, Massachusetts, United States`
+  → 120 results; `location=Canada` → 0; `department=Technology&location=Canada`
+  → 0). Fields per job (`positions[]`): `display_job_id` (e.g.
+  `"2026-261897"`, matches the site's visible req-ID format — use as
+  `external_id`), `name`, `location`/`locations[]`, `department`,
+  `canonicalPositionUrl`, `t_create` (real Unix timestamp, genuine posted
+  date, not relative text). `platform` = **`"Eightfold"`**.
+- **Blizzard** — real URL `https://careers.blizzard.com/global/en`, still a
+  standalone site (not folded into Microsoft's careers portal). Platform:
+  **Phenom People** front-end (same `phApp.ddo` blob pattern as RBC/BMO), but
+  every job's `applyUrl` points at
+  `xboxgaming.wd1.myworkdayjobs.com/Blizzard_External_Careers/...` — i.e. the
+  real ATS behind it is Microsoft's Xbox Gaming Workday tenant, post-acquisition
+  (same reasoning as Manulife: record the real backend, not the Phenom shell).
+  Category page: `https://careers.blizzard.com/global/en/engineering-technology`
+  → search results via `rk=l-engineering-technology` (confirmed real category
+  refinement param; the facet in the returned blob showed `{"Engineering":9}`
+  exclusively when applied). Pagination: `from=N` in steps of 10, same
+  "most-relevant sort isn't fully stable" caveat as RBC. **No server-side
+  Canada filter could be confirmed** — the `country` facet across all 47 open
+  roles sitewide is US/China/Ireland only right now, so there's no live
+  Canadian job to reverse-engineer a filter param from. Given the low volume
+  (9 jobs in this category), the scraper should fetch the category's full
+  unfiltered result set and filter `country === "Canada"` client-side in
+  Python, rather than relying on an unconfirmed facet param. Fields: same
+  blob shape as RBC (`jobId`, `title`, `postedDate`, `category`,
+  `location`/`cityStateCountry`, `country`, `applyUrl`). `platform` =
+  **`"Workday"`** (per the applyUrl convention established for RBC/BMO).
+- **Riot Games** — real URL `https://www.riotgames.com/en/work-with-us`, a
+  genuinely custom-built React site, but job detail pages embed the standard
+  Greenhouse widget (`<div id="grnhse_app">`, board token `riotgames`), so
+  the canonical data source is Greenhouse's public API:
+  `GET https://boards-api.greenhouse.io/v1/boards/riotgames/jobs?content=true`
+  (155 jobs, one call, no pagination needed). Greenhouse's public boards API
+  has **no server-side location filter** (`location=` query param is
+  ignored — confirmed by diffing filtered vs. unfiltered responses); Canada
+  jobs must be found by client-side filtering `location.name`. Currently **0**
+  Canada jobs (matches the site's own location dropdown, which has no
+  Canada option right now). Category facet: each job's `metadata[]` array
+  has a `"Craft"` field with confirmed values including `"Software
+  Engineering Group"`, `"Engineering"`, `"Infrastructure"`, `"QA Group"`,
+  `"Data"`. Fields: `id` (stable numeric, use as `external_id`),
+  `requisition_id` (e.g. `"REQ-0010050"`), `title`, `absolute_url`,
+  `location.name`, `departments[]`, `offices[]`, `metadata[]`,
+  `first_published` (real ISO datetime, distinct from `updated_at`).
+  `platform` = **`"Greenhouse"`**.
+- **Nvidia** — tenant `nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite`,
+  Workday CXS API at `.../wday/cxs/nvidia/NVIDIAExternalCareerSite/jobs`.
+  Category facet `jobFamilyGroup`, Engineering =
+  `0c40f6bd1d8f10ae43ffaefd46dc7e78`. Country is **not** a flat facet like
+  other tenants — nested under `locationHierarchy1` (under a
+  `locationMainGroup`), Canada = `2fcb99c455831013ea529c3b93ba3236` — a
+  tenant-specific ID, *not* the shared `a30a87ed25634629aa6c3958aa2b91ea` used
+  by SOTI/CIBC/TD/Manulife, reconfirming that every tenant's facet IDs need
+  independent verification. Combined query
+  (`appliedFacets: {"jobFamilyGroup":[...], "locationHierarchy1":[...]}`)
+  confirmed working: **10 real Canada + Engineering jobs**. Pagination:
+  `limit`/`offset` in the POST body; trust `total` only from the first page
+  (per the existing TD bug fix). `bulletFields` is single-element here
+  (`[reqId]`, no second field like TD/Manulife). Detail endpoint confirmed
+  at `.../wday/cxs/nvidia/NVIDIAExternalCareerSite<externalPath>` for real
+  `startDate`/`location`/`externalUrl`. `platform` = **`"Workday"`**.
+- **UBC** — three separate Workday sites by employee type; staff jobs are
+  the relevant one: `ubc.wd10.myworkdayjobs.com/ubcstaffjobs`, CXS API at
+  `.../wday/cxs/ubc/ubcstaffjobs/jobs`. No country filter needed — every
+  location facet value is already a BC campus. Category facet is
+  `jobFamily`, fine-grained by union/role rather than a broad tech bucket;
+  closest Software-Engineering equivalent, confirmed against actual returned
+  job titles ("Programmer Systems Analyst II", "Support Analyst I", "Network
+  Analyst I, Wireless"): **`"M&P Information Systems & Tech"` =
+  `0f50d6e300ee011d7120b51e4001a9f9`** (4 jobs). Detail endpoint confirmed at
+  `.../wday/cxs/ubc/ubcstaffjobs/job/<externalPath>`. `platform` =
+  **`"Workday"`**.
+- **Reddit** — real URL `https://job-boards.greenhouse.io/reddit`. Platform:
+  Greenhouse (Greenhouse's own hosted board domain, unambiguous). API:
+  `GET https://boards-api.greenhouse.io/v1/boards/reddit/jobs?content=true`
+  (156 jobs, one call). Same as Riot: **no server-side location filter**
+  (confirmed by diffing `?location=Canada` against the unfiltered response —
+  identical); client-side filtering on `location.name` found **13 real
+  Canada jobs** (Toronto, Remote-Ontario, Remote-BC), skewing
+  Ads/Data-Science-adjacent rather than pure "Software Engineering." A
+  richer endpoint, `GET https://boards-api.greenhouse.io/v1/boards/reddit/departments`,
+  returns Greenhouse's actual department tree with parent/child IDs —
+  top-level **`"Engineering"` department, id `16253`** (children include
+  `"Ads Engineering"`, `"Machine Learning"`, `"BE Platform"`, `"Site
+  Reliability"`, `"FE Platform"`) — a more precise category scope than
+  string-matching, using each job's `departments[]` array (note: the
+  `metadata[]` entry literally named `"Department"` was `null` on the job
+  inspected — `departments[]` at the top level is the reliable field, not
+  that metadata entry). `platform` = **`"Greenhouse"`**.
+- **ATS Corporation** (real domain is `atsautomation.com` —
+  `atscorporation.com` is an unrelated parked/for-sale domain, confirmed via
+  its Akamai "forsale.godaddy.com" block page; don't confuse the two).
+  Careers site `https://jobs.atsautomation.com/` redirects into
+  `career5.successfactors.eu/career?...&company=atsP2` — **SAP
+  SuccessFactors classic Recruiting Career Site** (RCM), a different layer
+  than Scotiabank's Jobs2Web — confirmed via `/ui/rcmcareer/`,
+  `/ui/rcmjobsearch/`, `/ui/ravcareer/` asset paths. **Investigation
+  incomplete**: unlike Scotiabank's plain server-rendered HTML, this career
+  site's search is a session/CSRF-token-driven AJAX widget (SF's internal
+  "ASProxy" RPC protocol) — not callable blind with curl/httpx. The standard
+  SF OData endpoint (`career5.successfactors.eu/odata/v2/JobRequisitionLocale?company=atsP2`)
+  returned a bare 404, so that path is out. This needs the same treatment as
+  EA's original investigation: drive the real search form once with
+  Playwright, capture the exact POST it fires (URL, body shape, and
+  whatever session/CSRF token it needs), then decide whether that request
+  can be replayed headlessly. Not scraper-ready yet. `platform` will be
+  **`"SuccessFactors"`** once confirmed.
+
+### Intel, Oracle, Spotify, Adobe, Sony, AMD, Uber scraping approach (investigated 2026-09-19)
+
+- **Intel** — the marketing-facing `jobs.intel.com` domain is currently dead
+  (every path 301s to a broken-link redirector); the real backend is
+  Workday, tenant `intel.wd1.myworkdayjobs.com/External`, CXS API confirmed
+  (`total: 615` globally). Category facet `jobFamilyGroup`, "Software
+  Engineering" = `ace7a3d23b7e01a0544279031a0ec85c`. **No country-level
+  facet** — locations are city-granular under `locationMainGroup` →
+  `locations`; Canada requires passing **both** `"Canada, Toronto"`
+  (`1e4a4eb3adf1019f4237e975bf81b3ce`) and `"Virtual Canada"`
+  (`3d7e019f2bb20100b6accdbea05c0000`) — confirmed Toronto-only gives 0,
+  both together gives 3 (all "Virtual Canada"). Pagination: `limit`/`offset`
+  body fields, standard CXS. `bulletFields` is single-element (`[reqId]`).
+  `platform` = **`"Workday"`**.
+- **Oracle** — its own product, **Oracle Recruiting Cloud** (Fusion Cloud
+  HCM), not a third-party ATS. Public, unauthenticated REST API found via
+  the CSP header on `oracle.com/careers/`:
+  `GET https://eeho.fa.us2.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions?onlyData=true&expand=requisitionList&finder=findReqs;siteNumber=CX_1,facetsList=LOCATIONS;CATEGORIES,limit=20,offset=0`
+  (confirmed 200, `TotalJobsCount: 2261`). Category filter:
+  `selectedCategoriesFacet=<id>` from the response's own `categoriesFacet`
+  array (e.g. "Product and Research" = `302958497961752`). **Canada filter
+  is fuzzy, not exact** — both `location=Canada` and
+  `selectedLocationsFacet=300000000106749` return the same 8-job set, but
+  some have `PrimaryLocation: "United States"` (confirmed by inspection, not
+  a bug on our end) — the scraper must fetch that candidate set and
+  client-side-filter on `PrimaryLocation` containing `"Canada"`. Fields:
+  `Id`, `Title`, `PostedDate` (already a plain ISO date — no fallback
+  needed), `PrimaryLocation`, `JobFamily`/`JobFunction` (null in practice at
+  this site number — don't rely on them). Pagination: standard
+  `limit`/`offset`. `platform` = **`"Oracle Recruiting Cloud"`**.
+- **Spotify** — `lifeatspotify.com`'s own API
+  (`api.lifeatspotify.com/wp-json/animal/v1/job/search`) only does
+  client-side filtering (ignores query params) and is a thin wrapper; the
+  real backend ATS is **Lever**, confirmed via each job's `apply` link
+  pointing at `jobs.lever.co/spotify/...`. Scrape Lever directly:
+  `GET https://api.lever.co/v0/postings/spotify?mode=json` (no auth, 71
+  postings in one call, `skip=N` pagination exists but isn't needed at this
+  size). No server-side Canada/category filter; each posting has `country`
+  (ISO-2, e.g. `"CA"`) and `categories.department` — filter client-side.
+  Currently **0 Canada+Engineering** (the one Canada posting found is
+  department "Data and Analytics", not Engineering — a legitimate empty
+  result). Fields: `id` (UUID, stable), `text` (title), `categories.*`,
+  `country`, `createdAt` (real epoch-ms, clean date), `hostedUrl`.
+  `platform` = **`"Lever"`**.
+- **Adobe** — Phenom People, same `phApp.ddo` blob family as RBC/BMO
+  (`careers.adobe.com/us/en/search-results?category=<label>`), confirmed by
+  `totalHits` changing with the category param. **Country query param does
+  not work** — every variant tried (`country=Canada/CA/canada`,
+  `locations=Canada`, array/bracket forms) returned identical, unfiltered
+  `totalHits` still containing non-Canada jobs; there's no separate `/ca/en/`
+  locale (redirects back to `/us/en`). Must fetch the category-filtered
+  pages and filter **client-side** on each job's `"country"` field (full
+  name, e.g. `"United States of America"`) — confirmed exactly **7 Canada
+  jobs** company-wide right now. Pagination: `&from=<offset>&s=1`, 10/page,
+  same not-fully-stable-sort caveat as RBC. Every job's `applyUrl` points at
+  `adobe.wd5.myworkdayjobs.com` — same Phenom-front/Workday-apply
+  relationship as RBC/BMO. `platform` = **`"Workday"`**.
+- **Sony** — `sony.com`'s own corporate careers page is flat-403-blocked
+  (Akamai, same category of block as Manulife, not investigated further).
+  The real public careers site is **`sonyjobs.com`**, whose `jobs.html`
+  statically embeds `<iframe src="https://sonyglobal.wd1.myworkdayjobs.com/SonyGlobalCareers">`
+  — Workday, tenant `sonyglobal`, confirmed via the CXS API (`total: 111`
+  globally, spans multiple Sony subsidiaries as `Company` facet values).
+  Country facet `locationCountry`, Canada =
+  `a30a87ed25634629aa6c3958aa2b91ea` — **the same shared cross-tenant ID**
+  already seen on SOTI/CIBC/TD/Manulife. Category facet `jobFamilyGroup`,
+  the Software-Engineering-equivalent value is specifically
+  `"Product Development_Software"` = `bf0e94cb2dac0126e6d1bfd19e01df13`
+  (distinct from a broader parent "Product Development" facet). Combined
+  filter confirmed working mechanically; currently **0** jobs in that exact
+  combination (Canada-only gives 1 unrelated marketing role — legitimate
+  empty result for the SWE slice). Detail endpoint confirmed for real
+  `startDate`. `platform` = **`"Workday"`**.
+- **AMD** — **blocked, no workaround found.** `careers.amd.com` points at
+  `careers-amd.icims.com` (iCIMS) as its actual system of record (no
+  evidence of a secondary underlying ATS to fall back to, unlike Manulife).
+  Every direct request to the iCIMS jobs-search endpoint — with or without
+  browser-like headers — returns `405` with `x-amzn-waf-action: captcha`
+  (an AWS WAF bot challenge; same category of problem as Manulife's Akamai
+  block, different vendor/mechanism). The public careers page itself has no
+  server-rendered job data to fall back to either. Not scraper-ready;
+  `platform` would be **`"iCIMS"`** if a workaround is ever found. A real
+  Playwright pass could confirm whether the WAF challenge is solvable
+  non-interactively, but Manulife's experience suggests it may not be worth
+  pursuing.
+- **Uber** — **blocked, unresolved.** `careers.uber.com` → a custom in-house
+  Next.js app, no third-party ATS vendor signature found anywhere in its
+  rendered HTML or JS bundles. Its job-search mutation endpoint
+  (`POST /api/loadSearchJobsResults`) returns `403 Missing csrf token` — an
+  app-level CSRF gate, not a WAF/Cloudflare block (Cloudflare's own cookie
+  was present and not the blocker). Real Canada SWE postings do exist
+  (confirmed via web search of individual `.../careers/list/<id>/` pages,
+  e.g. "Software Engineer II (Backend), Airports - Toronto, Canada") but
+  couldn't be enumerated without a real browser session to acquire the CSRF
+  token, the same technique EA's original investigation used for its opaque
+  Avature facet IDs. Not scraper-ready; `platform` tentatively "Uber
+  (custom)" pending that follow-up — do not record a third-party vendor name
+  without further confirmation.
+
+### Airbnb, Databricks, Stripe scraping approach (investigated 2026-09-19)
+
+All three turned out to be **Greenhouse** under the hood despite each having
+a different custom front-end. In all three cases the public,
+unauthenticated Greenhouse Board API works directly and is far cleaner than
+scraping the custom front-end HTML:
+- `GET https://boards-api.greenhouse.io/v1/boards/<token>/jobs?content=true`
+  — tokens confirmed: `airbnb`, `databricks`, `stripe`.
+- `GET https://boards-api.greenhouse.io/v1/boards/<token>/departments` — full
+  department tree with per-department job counts.
+- **No pagination** — each call returns the complete current job list in one
+  response (confirmed: Airbnb 168 jobs matching the site's own "168 open
+  positions" figure; Databricks 878; Stripe 667).
+- Per-job fields: `id` (stable numeric Greenhouse job id — use as
+  `external_id`), `title`, `location.name` (free text, e.g. "Toronto,
+  Canada" — no separate country code field), `departments[].name`,
+  `absolute_url`, `updated_at`, `first_published` (true original post date,
+  confirmed distinct from `updated_at`). **`requisition_id` is unreliable**
+  — Stripe always returns the literal placeholder `"See Opening ID"`,
+  Airbnb returns junk (`"MULTI"`/`"ONE"`); only Databricks has a real value.
+  Use Greenhouse's own `id`, never `requisition_id`, as `external_id`.
+- **Airbnb**: confirmed via the job-detail "Apply Now" embed script
+  (`for=airbnb`). Department for category filter: **`Software Engineering`**
+  (id `77`, 38 jobs). No country facet in the API — filter client-side on
+  `location.name` containing `"Canada"`. Currently **0** jobs match Canada +
+  Software Engineering simultaneously (verified: Canada jobs exist, just not
+  in this department right now).
+- **Databricks**: confirmed via its Gatsby `page-data.json` embedding a
+  `allGreenhouseJob` GraphQL type and `gh_jid=` job URLs. Two SWE-relevant
+  departments: **`Engineering`** (id `4001015002`, 54 jobs) and
+  **`Engineering - Pipeline`** (id `4115423002`, 140 jobs). Same
+  client-side `"Canada"` substring filter on `location.name`; real matches
+  found (e.g. "Senior Software Engineer - Backend", Vancouver).
+- **Stripe**: confirmed via an inline JSON blob on the site with
+  `"listings":[{"greenhouseId":...}]` per job. **No single "Engineering"
+  department** — Stripe's tree is ~192 deeply-nested numeric-prefixed teams
+  (e.g. `"8512 Terminal - Eng"`). Practical filter: department name
+  containing `"Eng"` (case-insensitive) and/or title containing
+  `"Engineer"` — a heuristic, not an exact facet, since no clean category
+  exists here. Confirmed 29 Canada matches with this approach.
+- `platform` = **`"Greenhouse"`** for all three.
+
+### SAP scraping approach (investigated 2026-09-19)
+
+- Real URL: `https://jobs.sap.com`. Confirmed **SAP SuccessFactors**
+  (self-hosted) via CSP headers referencing `*.successfactors.com`/
+  `*.sapsf.com`/`*.sapsf.eu`, Jobs2Web asset paths (same product family as
+  Scotiabank's setup), and an SSO redirect to `career5.successfactors.eu`.
+- Unlike Scotiabank, `/search/` is a JS SPA layer over the classic Jobs2Web
+  engine, but classic server-rendered results are still directly reachable:
+  `GET https://jobs.sap.com/search/?q=&locationsearch=Canada` — **requires a
+  normal browser User-Agent header** (plain curl with no UA got blocked; a
+  Chrome UA worked) — this is a basic UA check, not a hard WAF block like
+  Manulife's. Confirmed `locationsearch=Canada` really filters (title became
+  "Canada - SAP Jobs"; 19 unique Canada jobs).
+- Pagination: `startrow=N`, page size 25 (confirmed `startrow=25` correctly
+  empties out once the 19 Canada results are exhausted).
+- **Category/department facet dropdowns exist in the HTML but their option
+  values are populated by client-side JS/AJAX not visible to plain HTTP** —
+  could not enumerate real category facet values or param names without a
+  Playwright network trace, same as EA's original investigation.
+- List view has title, job URL (with a stable numeric requisition ID, e.g.
+  `1426752233`, use as `external_id`), and one free-text location string.
+  **Category and posted date are only on the detail page**
+  (`https://jobs.sap.com/job/<slug>/<id>/`) — free-text **"Work Area"**
+  field (e.g. `"Software-Design and Development"`, confirmed on real Canada
+  jobs) and a real absolute **"Posted Date"** — one extra request per job,
+  same pattern as SOTI/Manulife.
+- `platform` = **`"SuccessFactors"`**.
+
+### Snowflake scraping approach (investigated 2026-09-19)
+
+- Real URL: `https://careers.snowflake.com/us/en`. Confirmed **Phenom
+  People** (same family as RBC/BMO) via the `PHPPPE_ACT` cookie and
+  `phApp`/`phApp.ddo` blob — but here the job list lives at
+  `phApp.ddo.eagerLoadRefineSearch.data.jobs` (a different path than RBC's).
+- **Category filter confirmed working**: `?category=Engineering` drops
+  `totalHits` to exactly 96, matching the facet's own aggregation count.
+- **No working country filter** — `country=Canada` is silently ignored;
+  `location=` only works with an exact city-level string (e.g.
+  `location=Toronto, Ontario, Canada` correctly returns 6 hits) — there's no
+  country-level location facet. Practical approach: filter server-side by
+  `category=Engineering`, then client-side on each job's own `country`
+  field (present per job) — confirmed a real match this way (`REQ18507`,
+  country=Canada).
+- Pagination: `from=N` in steps of 10, same convention as RBC.
+- Fields: `reqId` (human-readable, stable, e.g. `"REQ20118"` — use as
+  `external_id`), `title`, `country`, `city`, `category`, `department`,
+  `postedDate` (real ISO date), `applyUrl`.
+- **Every job's `applyUrl` points at `jobs.ashbyhq.com/snowflake/<uuid>`
+  with `"externalApply": true`** — Snowflake's real underlying ATS is
+  **Ashby**, not Workday; the Phenom front-end is purely a listing/branding
+  layer, same relationship pattern as RBC/BMO/Manulife's Phenom-front/other-ATS-apply.
+- `platform` = **`"Ashby"`**.
+
+### Metrolinx scraping approach (investigated 2026-09-19)
+
+- Real URL: `https://www.metrolinx.com/en/about-us/careers` links out to
+  `https://ehtc.fa.ca2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1`
+  — **Oracle Fusion Cloud Recruiting** (distinct from the older Oracle
+  Taleo product, and a different Oracle Cloud pod than Oracle Corp's own
+  careers site above).
+- Public, unauthenticated REST API confirmed:
+  `GET https://ehtc.fa.ca2.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions?onlyData=true&expand=requisitionList.secondaryLocations,flexFieldsFacet.values&finder=findReqs;siteNumber=CX_1,facetsList=LOCATIONS%3BWORK_LOCATIONS%3BTITLES%3BCATEGORIES%3BORGANIZATIONS%3BPOSTING_DATES%3BFLEX_FIELDS,limit=25,offset=0,sortBy=POSTING_DATES_DESC`.
+  **The `expand=requisitionList...` param is required on every page** — omitting
+  it silently returns facets with no `requisitionList` at all (looks like an
+  error but isn't).
+- **No country filter needed** — the `locationsFacet` shows a single
+  `"Canada": 38` bucket for all 38 currently-open jobs (expected for an
+  Ontario transit agency).
+- **No dedicated tech/IT category currently exists** — `categoriesFacet`
+  only reflects the live result set (Management, Administrative and
+  Clerical, Project Management, etc.), no "Technology"/"IT" bucket right
+  now. One job title (`"Manager, I&IT Project Management Office"`) hints at
+  Metrolinx's internal `"I&IT"` naming convention, filed under "Project
+  Management" rather than a distinct tech category. Given only 38 total
+  jobs (already Canada-only), recommend pulling all of them and either
+  keyword-matching titles for `I&IT`/`IT`/`Software`/`Developer`/`Systems`,
+  or skipping category filtering and recording the free-text `Category`
+  as-is — same "no cross-company normalization" convention as elsewhere.
+- Pagination: `offset`/`limit` in the query string, page size 25, confirmed
+  a real non-overlapping second page.
+- Fields: `Id` (stable numeric requisition ID, use as `external_id`),
+  `Title`, `PostedDate` (real absolute date), `PrimaryLocation`,
+  `WorkplaceType`. `JobFamily`/`JobFunction`/`Department`/`Organization`
+  are `null` on every job sampled — don't rely on them.
+- `platform` = **`"Oracle Recruiting Cloud"`**.
+
+### Eclipse Automation — investigation blocked by third-party outage (investigated 2026-09-19)
+
+- Real URL `https://www.eclipseautomation.com/careers/` links out to
+  `https://jobs.dayforcehcm.com/en-CA/eclipse/CANDIDATEPORTAL` — **Dayforce**
+  (Ceridian's HCM/ATS product), company code `eclipse`.
+- **Could not verify anything beyond the platform identity**: every request
+  to `jobs.dayforcehcm.com` (both locale variants, with/without a browser
+  UA, and even unrelated control tenant codes) redirected to
+  `.../en-CA/systemUnderMaintenance`, whose body states Dayforce-powered
+  career sites are undergoing scheduled maintenance platform-wide — retried
+  multiple times, still down each time. This is a Dayforce-wide outage, not
+  specific to Eclipse's tenant.
+- **Needs a follow-up pass once Dayforce's maintenance window ends**, using
+  the same method as everywhere else here (check for a JSON API vs.
+  server-rendered HTML, confirm country/category filter params, confirm a
+  stable job ID and posted-date field). Not scraper-ready.
+- `platform` = **`"Dayforce"`** (confirmed platform identity; nothing else
+  about it is confirmed).
+
+### Meta, Amazon, Google, Apple, Microsoft, IBM, Canonical scraping approach (investigated 2026-09-19)
+
+Investigated via real HTTP requests, plus a temporarily-installed
+Playwright/Chromium session where a plain fetch didn't reveal the real API
+(same pattern as EA's original investigation) — used only to observe
+network calls or bypass a block, not part of the eventual scraper except
+where noted for Meta.
+
+- **Meta** — `metacareers.com` returns **HTTP 400 to every plain curl
+  variant tried** (headers didn't matter) — a client-fingerprint-level
+  block (TLS/HTTP2 fingerprint, not a WAF page), confirmed bypassed
+  trivially by a real/headless Chromium (200 OK, real content). The real
+  API is `POST https://www.metacareers.com/graphql`, but **the request body
+  carries ~10 Meta-internal anti-automation tokens minted by the page's own
+  JS on load** (`lsd`, `jazoest`, `__hs`, `__dyn`, `__csr`, etc.) — these
+  are session-bound, not hardcodable secrets. **This means Meta cannot be
+  scraped with lightweight periodic HTTP calls at all** — unlike every
+  other company in this project, it would need a full Playwright browser
+  session on every scrape run. Category facet: `team_display_name`,
+  "Software Engineering" is one of ~25 values. Location facet is per-city,
+  not per-country (`montreal`, `toronto`, `vancouver`, `ottawa`,
+  `canada-remote`, `sturgeon-county-dc`, each carrying `"country":"Canada"`)
+  — would need to pass all of these IDs together. Fields: `id` (stable
+  numeric string, use as external_id), `title`, `locations[]` (display
+  strings, not IDs), `teams`. **No posted-date field at all** — falls back
+  to `first_seen_at`. Pagination not fully determined (unfiltered query
+  returned all 989 jobs in one response). `platform` =
+  **`"Meta Careers (custom, in-house)"`**.
+- **Amazon** — `https://www.amazon.jobs/en/search.json`, a fully open JSON
+  API, no bot-blocking at all, no auth needed. Confirmed working combined
+  filter: `?category[]=software-development&country=CAN&result_limit=20&offset=0`
+  → 179 hits. Note the asymmetric quirk: `category[]=` (array form) and
+  `country=` (singular form) are the only forms that actually filter —
+  `category=` singular and `country[]=` array are silently ignored, confirmed
+  by testing all four combinations. Pagination: `offset`/`result_limit` in
+  the query string. Fields: `id_icims` (legacy field name, but Amazon's
+  system is not actually iCIMS — still the stable ID, use as external_id),
+  `title`, `job_category` (exact match), `city`, `state`, `country_code`,
+  `posted_date` (real parseable date), `job_path` (prefix with
+  `https://www.amazon.jobs`). `platform` = **`"Amazon Jobs (custom,
+  in-house)"`**.
+- **Google** — `https://www.google.com/about/careers/applications/jobs/results`,
+  fully open, no blocking, and **fully server-rendered in plain HTML** (an
+  initial test query looked like a JS-only SPA with 0 results, but that was
+  a bad query — confirmed real server-rendered data with a working query).
+  Confirmed working request: `?location=Canada&q=%22Software%20Engineer%22`
+  → real matches directly in the curl'd HTML. **No true category/team
+  facet** — confirmed via Playwright that the UI's own "What do you want to
+  do?" field just resolves to the same free-text `q=` quoted-phrase search,
+  not a separate facet param, so category filtering has the same
+  recall/precision caveat as EA's free-text approach. `location=Canada` IS
+  a real facet (confirmed via the results-page location chip).
+  Pagination: `page=N` (1-indexed), page size 20. Fields: stable numeric
+  job ID from the `ssk` HTML attribute (also in the detail URL), title,
+  location string(s), experience-level tag. **No posted date anywhere** —
+  falls back to `first_seen_at`. `platform` = **`"Google Careers (custom,
+  in-house)"`**.
+- **Apple** — `https://jobs.apple.com/en-us/search?location=canada-CANC`
+  (`canada-CANC` confirmed as Canada's location facet ID), fully open, no
+  blocking, server-rendered via an embedded
+  `window.__staticRouterHydrationData` JSON blob (same "parse one big
+  embedded blob" pattern as RBC's `phApp`, React-Router-flavored instead of
+  Phenom). **No working URL-level category facet** — `team=`/`teams=`/
+  `role=` params tried, none changed the result count; the only filtering
+  param that works is free-text `search=`, with the same off-target-hit
+  caveat as Google. **Recommended approach**: fetch `location=canada-CANC`
+  unfiltered (34 jobs, `page=1,2`, page size 20), then filter **client-side**
+  on the embedded JSON's `team.teamName == "Software and Services"` (present
+  on every job object even though not exposed as a URL filter) — exact
+  precision without the free-text noise. Fields (from
+  `loaderData.search.searchResults[]`): `id` (stable, use as external_id),
+  `postingTitle`, `postDateInGMT` (real ISO datetime — use as posted_date),
+  `team.teamName`/`teamCode`, `locations[].name`/`countryName`, `reqId`.
+  Apply happens directly on `jobs.apple.com`, no external ATS. `platform` =
+  **`"Apple Jobs (custom, in-house)"`**.
+- **Microsoft** — real URL resolves to
+  `https://apply.careers.microsoft.com/careers`. **Platform: Eightfold**,
+  confirmed unambiguously via response headers (`x-ef-ns: smartapply`,
+  `x-ef-req-endpoint`, `x-ef-trace-id`) and CSP referencing
+  `docs.eightfold.ai`. The page is a client-rendered SPA; the real search
+  API (`GET https://apply.careers.microsoft.com/api/pcsx/search?domain=microsoft.com&query=<text>&location=<text>&start=<offset>`)
+  was found via Playwright network capture. Both `query` and `location` are
+  plain free-text params, no opaque facet IDs — confirmed `location=Canada`
+  alone returns 63 real Canadian jobs. **No working `department=` facet
+  param** (silently ignored) — recommended approach is to fetch
+  `location=Canada` unfiltered, then filter client-side on each job's own
+  `department == "Software Engineering"` field. Pagination: `start=` offset,
+  page size 10. Fields: `id`, `displayJobId`/`atsJobId` (human req number,
+  recommend as external_id), `name` (title), `department`, `locations`,
+  `postedTs` (real Unix timestamp), `positionUrl` (prefix with
+  `https://apply.careers.microsoft.com`). `platform` = **`"Eightfold"`**.
+- **IBM** — two distinct layers. **Search/discovery**:
+  `https://www.ibm.com/careers/search`, backed by IBM's own custom
+  Elasticsearch-backed index, not a third-party ATS — found via Playwright
+  network capture: `POST https://www-api.ibm.com/search/api/v2` with raw
+  Elasticsearch query DSL exposed directly to the client, **no bot-blocking
+  at all**, works with plain curl. Confirmed combined filter:
+  `post_filter.bool.must = [{"term":{"field_keyword_08":"Software Engineering"}},{"term":{"field_keyword_05":"Canada"}}]`
+  → 32 real Canadian software-engineering hits (of 379 global Software
+  Engineering jobs, of 1884 total). Pagination: standard ES `size`/`from`
+  in the POST body. Fields: `title`, `url` (→
+  `https://careers.ibm.com/careers/JobDetail?jobId=<ID>`, numeric jobId is
+  the external_id), `description`. **No posted-date field available at
+  all** — falls back to `first_seen_at`. **Application/detail layer**:
+  `careers.ibm.com/careers/JobDetail?jobId=<ID>` confirmed running on
+  **Avature** (`<meta name="avature.portal.id">` etc., same ATS as EA) and
+  protected by an **AWS WAF JS challenge** (curl gets `202 Accepted`,
+  `Content-Length: 0`, `x-amzn-waf-action: challenge` — never returns
+  content; a real/headless Chromium passes through automatically by
+  executing the challenge). This layer is unnecessary to touch since the
+  search-index layer already provides everything needed (and has no posted
+  date to offer anyway). `platform` = **`"Avature"`** (the actual
+  application system of record), noting job discovery goes through IBM's
+  own Elasticsearch API instead of Avature's own search — analogous in
+  spirit to Manulife's two-tier finding, though here both tiers are IBM's
+  own domains.
+- **Canonical** — `https://canonical.com/careers` embeds
+  `job-boards.greenhouse.io/canonical/jobs/<id>` links — **Greenhouse**,
+  confirmed directly. API: `GET https://boards-api.greenhouse.io/v1/boards/canonical/jobs?content=true`
+  → 304 jobs, no bot-blocking, no auth, no pagination needed. **No clean
+  Canada facet** — Canonical is remote-first; `offices[].name` values are
+  broad regional buckets (`"Home Based - Americas"`, etc.) plus one literal
+  `"Office Based - Toronto, Canada"`. Most Canada-based remote engineers
+  would actually be filed under the country-agnostic `"Home Based -
+  Americas"` bucket (which also includes the US and Latin America), so a
+  strict Canada filter using only the office field would under-count — a
+  real, confirmed data-shape limitation to document as a caveat, not a bug.
+  **No single "Software Engineering" department either** — confirmed
+  separate sub-departments (`"Charm Engineering"`, `"Cloud Engineering"`,
+  `"Devices Engineering"`, `"SRE"`, `"SaaS Engineering"`, `"Web
+  Engineering"`, etc.) — a scraper would need to match against this whole
+  set rather than a single exact string. Fields: `id` (numeric, stable,
+  use as external_id), `title`, `absolute_url`, `location.name`,
+  `departments[].name`, `offices[].name`, `first_published` (true original
+  posting date, better than `updated_at`). `platform` = **`"Greenhouse"`**.
+
+### Shopify, Thomson Reuters, Salesforce, Autodesk, Sun Life scraping approach (investigated 2026-09-25)
+
+- **Shopify** — real ATS is **Ashby** (jobs link as
+  `shopify.com/careers?ashby_jid=<uuid>`), but there's no public Ashby board
+  (posting API 404s for every plausible slug; Greenhouse/Lever 404 too).
+  The careers page is a React Router app, and its loader data is available
+  on its own at `GET https://www.shopify.com/careers.data`. It's in React
+  Router's "turbo-stream" encoding (a flat, index-referenced JSON array),
+  which `scrapers/shopify.py` decodes. Jobs are at
+  `["($locale)/careers"].data.jobPostingsWithJobs[].jobPosting` (`id`
+  UUID = external_id, `title`, `teamName`, `publishedDate` real ISO date,
+  `locationIds`), with location UUIDs resolved through the sibling
+  `atsLocations` list. **Canada caveat**: all 44 Engineering postings are
+  listed only under the remote region "Americas", with no Canadian city, so
+  the scraper matches "Americas" as well as any Canadian location. This is
+  the same limitation as Canonical. `platform` = **`"Ashby"`**.
+- **Thomson Reuters** — Workday, `thomsonreuters.wd5.myworkdayjobs.com/External_Career_Site`.
+  Category facet is a custom field
+  `CF_Job_Posting_Anchor_Job_Category_EEB_Extended`, "Technology Careers" =
+  `9276a62d4e68100204e60c54e1cc0001`; `Location_Country` Canada = shared
+  `a30a87ed…` ID → 53 jobs. **`bulletFields` is `[cities, provinces, reqId]`**:
+  the req ID is the *last* element here, not the first, and
+  `locationsText` is null, so location comes from the detail endpoint.
+- **Salesforce** — Workday, `salesforce.wd12.myworkdayjobs.com/External_Career_Site`.
+  `jobFamilyGroup` "Software Engineering" = `14fa3452ec7c1011f90d0002a2100000`;
+  country facet has a long custom-field name
+  (`CF_-_REC_-_LRV_-_Job_Posting_Anchor_-_Country_from_Job_Posting_Location_Extended`)
+  but uses the shared Canada ID. Currently only 1 match. I cross-checked that
+  against passing every "Canada - <city>" `locations` value and got the same
+  result, so it's genuinely 1.
+- **Autodesk** — Workday tenant `autodesk.wd1.myworkdayjobs.com`, site `Ext`
+  (confirmed by current public Toronto job links). During investigation the
+  CXS API returned `404 not found: Job_Posting_Site_ID=Ext` and the web page
+  302'd to `myworkday.com/wday/drs/outage?t=autodesk&s=ext`, which is a
+  Workday outage/maintenance redirect for this tenant. `autodesk.com/careers`
+  itself is Akamai-403'd. **Retry the CXS facet discovery once the outage
+  clears.** (Its separate `uni` site does respond: 27 student jobs.)
+- **Sun Life** — Workday, `sunlife.wd3.myworkdayjobs.com/Experienced-Jobs`.
+  No `jobFamilyGroup`; `jobFamily` values "IT - Application Development"
+  (`b18e449d87914e8db756066e35d5f247`), "IT - Technology Services"
+  (`fc46f3fb6ab24457be62e0b15c2c0101`), "IT - Digital Development"
+  (`9d42de6b15aa0173c155daaa6201da7f`) + `Location_Country` Canada → 17
+  jobs. Location from the detail endpoint (multi-location "3 Locations"
+  placeholder in the list, same as Manulife).
+
+### Shared ATS helpers (added 2026-09-25)
+
+The fourth wave added ~30 companies, most on an ATS already covered, so
+per-platform helpers now live in `scraper/scrapers/` and each company
+module is just config + its investigation notes (docstring). Pre-existing
+scrapers were left as they are. Each helper's docstring explains the API:
+
+- `workday_cxs.py` — Workday CXS (list + per-job detail). Takes `jobReqId`
+  from the detail endpoint as `external_id` (the req ID's position in
+  `bulletFields` varies by tenant). Shows Canadian locations first when a
+  posting also has `additionalLocations`, because a country facet matches
+  a posting if *any* of its locations is in that country. `job_filter` can
+  filter on the detail's `country.descriptor` for tenants that have no
+  country facet.
+- `greenhouse.py`: department matching walks the `/departments` tree (a
+  parent name matches all sub-teams), with an optional exclude set. Canada
+  is matched on `location.name` + `offices[]` by default, with a per-company
+  override where offices are misleading (Dropbox, Geotab).
+- `ashby.py` — `api.ashbyhq.com/posting-api/job-board/<org>`.
+- `jobs2web.py` — SuccessFactors Jobs2Web (Scotiabank's layer): `/go/<cat>/<id>/`
+  landing pages, or `/search/` + `startrow` when there are none.
+- `phenom.py` — `phApp.ddo` blob, `?category=` per request.
+- `dayforce.py` — Dayforce candidate portal JSON API (see Questrade below).
+- `base.CANADA_PATTERN` is the shared free-text Canada matcher. It uses
+  whole-word province codes, so "San Francisco, CA" doesn't match.
+
+### Fourth wave, batches 2–6 scraping approach (investigated 2026-09-25)
+
+Company-specific findings. Each module's docstring has the full detail.
+
+- **Ashby** (`cohere`, `wealthsimple`, `1password` orgs): no server-side
+  filtering. Canada = address country or any secondary location. Cohere
+  departments: "Engineering & Infra", "Modeling", "Inference" (excluding
+  contract "Data Quality" annotation roles). Wealthsimple: "Data &
+  Engineering". 1Password: "Technology" (mostly "Remote (United States |
+  Canada)").
+- **Greenhouse** (`faire`, `cloudflare`, `dropbox`, `pinterest`,
+  `instacart`, `coinbase`, `geotab`, `d2l`):
+  - Cloudflare's `location.name` is only "Hybrid"/"Distributed", so the
+    city comes from `offices`.
+  - Cloudflare's "Solution Engineering" is pre-sales, so it's excluded.
+  - Dropbox's engineering sits under the top-level "EPD" org; "Product
+    Team" is excluded.
+  - Pinterest: the "Engineering, Product and Design (L2)" org minus Design
+    and Core Product.
+  - Instacart: everything under "Engineering" except Professional Services.
+  - D2L's Lever board is stale (2019); Greenhouse is the live one.
+- **National Bank** (`emplois.bnc.ca`, Avature like EA):
+  - The area-of-interest field (`6472`) has AJAX-only option IDs, found
+    with Playwright: 25044 IT, 25045 AI, 25047 Web & digital, 25059 BI &
+    data.
+  - The listing is a plain GET (`SearchJobs/?6472[]=…&listFilterMode=1`,
+    `jobOffset` in steps of 20).
+  - The RSS feed caps at 20 items (same as EA), so the posted date and
+    category come from each detail page.
+- **Intact / Clio / Arctic Wolf** (Workday): none of these tenants has a
+  country facet, so Canada is filtered on the detail's `country`.
+  - Intact's front-end `careers.intactfc.com` has its `/api/jobs`
+    Akamai-403'd. Its apply links reveal the tenant
+    `intactfc.wd3…/intactfc`.
+  - Clio: clio.com is Cloudflare-403'd. The tenant is
+    `clio.wd3…/ClioCareerSite`.
+  - Arctic Wolf's tenant is `arcticwolf.wd1…/External`.
+- **Interac** (`interac.wd3…/Interac`) and **Workday**
+  (`workday.wd5…/Workday`) are plain Workday; Workday uses the shared
+  Canada ID.
+- **Canada Life**: the SuccessFactors classic RCM XML feed works
+  (`career5.successfactors.eu/career?company=thegreatweP2&career_ns=job_listing_summary&resultType=XML`),
+  but it has only title, req ID and date, and it isn't well-formed XML.
+  The Jobs2Web site `jobs.canadalife.com/go/All-Jobs/9170201/` has a
+  Department column, so the scraper filters on "Digital Technology".
+  The same XML feed led to ATS Corporation's Jobs2Web site (see below).
+- **Rogers**: Jobs2Web `/go/Digital-&-Technology/9547900/` (a second,
+  stale ID 8824700 errors).
+- **TELUS**: Jobs2Web `/search/` only.
+  - **Zero tech postings as of 2026-09-25**: everything is retail, sales
+    or health. Departments are matched by tech keyword so new tech roles
+    get picked up.
+  - `jobs.telusdigital.com` is TELUS Digital, a separate subsidiary.
+- **Bell / OpenText**: Phenom front-ends with no `applyUrl` in the blob;
+  the job pages reference SuccessFactors.
+  - OpenText's `country` is ISO-3 ("CAN") and must be filtered
+    client-side, since `country=` is ignored.
+- **Questrade**: Dayforce, namespace `qfg`.
+  - The search API 403s without a NextAuth CSRF token. Get it from
+    `GET /api/auth/csrf` and send it back as `x-csrf-token`; that works
+    from plain httpx.
+  - The department filter `departmentId` takes a *single* int; it was
+    found in the JS bundle.
+  - Tech = departments prefixed "Technology :" / "TSS :".
+  - Postings in Argentina and Israel are filtered out by
+    `isoCountryCode`.
+  - Dayforce was back up on 2026-09-25, which also unblocked Eclipse
+    Automation (see below).
+- **Ubisoft**: SmartRecruiters company `Ubisoft2`. `country=ca` filters
+  server-side, and scope is the "Job Family" custom field (Software
+  Development, Information & Systems, Data). English and French duplicate
+  postings are both kept.
+- **Kinaxis**: iCIMS behind a Jibe front-end, with open JSON at
+  `join.kinaxis.com/api/jobs?page=N`. Filtered client-side on
+  `country_code == "CA"` and category Engineering / Information Technology.
+
+### ATS Corporation and Eclipse Automation, unblocked (2026-09-25)
+
+- **ATS Corporation** (`scrapers/atscorp.py`):
+  - The SuccessFactors classic RCM XML feed
+    (`career5.successfactors.eu/career?company=atsP2&career_ns=job_listing_summary&resultType=XML`)
+    has only titles and req IDs. But opening a job from it redirects to a
+    **Jobs2Web** site, `jobs.atsautomation.com`. The earlier investigation
+    only ever saw its root redirect into the classic RCM.
+  - Category page: `/go/Engineering%2C-Design%2C-&-Technical-Services/4455701/`,
+    86 jobs worldwide, 22 in Canada (Cambridge ON, Woodbridge ON, Montréal).
+  - It uses the newer **tile** template (`li.job-tile`) rather than the
+    table template, and its count marker reads "Showing X to Y of N".
+    `scrapers/jobs2web.py` handles both.
+  - Past the last page it keeps re-serving the final page, so a naive count
+    inflates totals. The helper dedupes and stops when a page adds no new
+    IDs.
+  - A separate `/PA/` site is ATS's German brand.
+- **Eclipse Automation** (`scrapers/eclipse.py`): Dayforce namespace
+  `eclipse`, via `scrapers/dayforce.py`.
+  - 48 postings, all Cambridge ON.
+  - Only 3 departments are defined, and most postings (including "AI
+    Software Engineer") have none. So jobs are filtered by title keyword
+    (software/developer/engineer/IT/AI/data/SCADA/controls) instead of
+    department.
+- **Autodesk**: still unreachable from this environment as of the end of
+  2026-09-25. `autodesk.wd1.myworkdayjobs.com/Ext` 302s to
+  `myworkday.com/wday/drs/outage?t=autodesk&s=ext`, and the CXS API says
+  `not found: Job_Posting_Site_ID=Ext`. Every other `wdN` data center
+  422s. `autodesk.com/careers` is Akamai-blocked even to headless Chromium.
 
 ## Deployment
 
