@@ -29,81 +29,16 @@ Games, Nvidia, UBC, Reddit, ATS Corporation scraping approach" section):
   not a bug.
 """
 
-import json
-import logging
-
-import httpx
-
 from .base import NormalizedJob
-
-logger = logging.getLogger(__name__)
-
-CATEGORY_URL = "https://careers.blizzard.com/global/en/engineering-technology"
-REFINEMENT = "l-engineering-technology"
-DDO_MARKER = "phApp.ddo = "
-MAX_PAGES = 50  # safety cap; this category currently has ~9 jobs total
+from .phenom import scrape_phenom
 
 
 def scrape() -> list[NormalizedJob]:
-    jobs: list[NormalizedJob] = []
-    seen_ids: set[str] = set()
-    offset = 0
-    total_hits: int | None = None
-
-    with httpx.Client(timeout=30, follow_redirects=True) as client:
-        for _ in range(MAX_PAGES):
-            response = client.get(CATEGORY_URL, params={"rk": REFINEMENT, "from": offset})
-            response.raise_for_status()
-
-            targeted = _extract_ddo(response.text)["targetedJobs"]
-            total_hits = targeted["totalHits"]
-            page_jobs = targeted["data"]["jobs"]
-            if not page_jobs:
-                break
-
-            for raw in page_jobs:
-                job_id = raw["jobId"]
-                # Pagination isn't confirmed fully stable under the site's
-                # default sort (same caveat as RBC), so guard against overlap.
-                if job_id in seen_ids:
-                    continue
-                seen_ids.add(job_id)
-                if raw.get("country") != "Canada":
-                    continue
-                jobs.append(_normalize(raw))
-
-            offset += len(page_jobs)
-            if offset >= total_hits:
-                break
-        else:
-            logger.warning("Blizzard scrape hit MAX_PAGES=%d without finishing — got %d jobs", MAX_PAGES, len(jobs))
-
-    logger.info("Blizzard: fetched %d Canada jobs (site reported totalHits=%s)", len(jobs), total_hits)
-    return jobs
-
-
-def _extract_ddo(html: str) -> dict:
-    idx = html.find(DDO_MARKER)
-    if idx == -1:
-        raise ValueError("Could not find phApp.ddo in Blizzard page — site structure may have changed")
-    start = idx + len(DDO_MARKER)
-    ddo, _end = json.JSONDecoder().raw_decode(html, start)
-    return ddo
-
-
-def _normalize(raw: dict) -> NormalizedJob:
-    location = (
-        raw.get("location")
-        or ", ".join(raw.get("multi_location", []))
-        or raw.get("cityStateCountry", "")
+    return scrape_phenom(
+        name="Blizzard",
+        list_url="https://careers.blizzard.com/global/en/engineering-technology",
+        params={"rk": "l-engineering-technology"},
+        blob_key="targetedJobs",
+        platform="Workday",
+        job_filter=lambda raw: raw.get("country") == "Canada",
     )
-    posted_date = raw.get("postedDate")
-    return {
-        "external_id": raw["jobId"],
-        "title": raw["title"],
-        "url": raw["applyUrl"],
-        "location": location,
-        "category": raw.get("category", ""),
-        "posted_date": posted_date[:10] if posted_date else None,
-        "platform": "Workday",
-    }

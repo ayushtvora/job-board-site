@@ -29,76 +29,17 @@ It uses the same Eightfold `pcsx` search API as Microsoft (scrapers/microsoft.py
   `positionUrl` (prefix with the site origin).
 """
 
-import logging
-from datetime import datetime, timezone
+from .base import NormalizedJob
+from .eightfold import scrape_eightfold
 
-import httpx
-
-from .base import CANADA_PATTERN, NormalizedJob
-
-logger = logging.getLogger(__name__)
-
-BASE_URL = "https://jobs.autodesk.com"
-SEARCH_URL = f"{BASE_URL}/api/pcsx/search"
-DOMAIN = "autodesk.com"
-LOCATION_FILTER = "Canada"
 JOB_CATEGORIES = ["development engineering", "artificial intelligence", "cybersecurity", "technology"]
-CATEGORY_LABEL = "Development Engineering / Technology"
-MAX_PAGES = 50
-MAX_LOCATIONS_SHOWN = 3
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
-    "Accept": "application/json",
-}
 
 
 def scrape() -> list[NormalizedJob]:
-    jobs: list[NormalizedJob] = []
-    seen_ids: set[str] = set()
-    start = 0
-
-    with httpx.Client(timeout=30, headers=HEADERS) as client:
-        for _ in range(MAX_PAGES):
-            params = [("domain", DOMAIN), ("query", ""), ("location", LOCATION_FILTER), ("start", str(start))]
-            params += [("filter_job_category", category) for category in JOB_CATEGORIES]
-            response = client.get(SEARCH_URL, params=params)
-            response.raise_for_status()
-            postings = (response.json().get("data") or {}).get("positions") or []
-            if not postings:
-                break
-            new_on_page = 0
-            for raw in postings:
-                job_id = raw.get("displayJobId") or str(raw["id"])
-                if job_id in seen_ids:
-                    continue
-                seen_ids.add(job_id)
-                new_on_page += 1
-                jobs.append(_normalize(job_id, raw))
-            if new_on_page == 0:
-                break
-            start += len(postings)
-        else:
-            logger.warning("Autodesk scrape hit MAX_PAGES=%d without finishing — got %d jobs", MAX_PAGES, len(jobs))
-
-    logger.info("Autodesk: fetched %d Canada + tech-category jobs", len(jobs))
-    return jobs
-
-
-def _normalize(job_id: str, raw: dict) -> NormalizedJob:
-    locations = raw.get("locations") or []
-    canadian = [loc for loc in locations if CANADA_PATTERN.search(loc)] or locations
-    location = "; ".join(canadian[:MAX_LOCATIONS_SHOWN])
-    if len(canadian) > MAX_LOCATIONS_SHOWN:
-        location += f" (+{len(canadian) - MAX_LOCATIONS_SHOWN} more)"
-
-    timestamp = raw.get("postedTs") or raw.get("creationTs")
-    posted_date = datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m-%d") if timestamp else None
-    return {
-        "external_id": job_id,
-        "title": raw["name"].strip(),
-        "url": f"{BASE_URL}{raw['positionUrl']}" if raw.get("positionUrl") else f"{BASE_URL}/careers/job/{raw['id']}",
-        "location": location,
-        "category": CATEGORY_LABEL,
-        "posted_date": posted_date,
-        "platform": "Eightfold",
-    }
+    return scrape_eightfold(
+        name="Autodesk",
+        base_url="https://jobs.autodesk.com",
+        domain="autodesk.com",
+        extra_params=[("filter_job_category", category) for category in JOB_CATEGORIES],
+        category_label="Development Engineering / Technology",
+    )

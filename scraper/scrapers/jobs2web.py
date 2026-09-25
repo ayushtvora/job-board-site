@@ -21,8 +21,6 @@ blocks (country, department, location, date) — parsed the same way. Those
 pages say "Showing X to Y of N" instead of "Results X to Y of N"; past the
 last page they keep re-serving it, so paging also stops once a page adds no
 new job IDs.
-
-Not used by scrapers/scotiabank.py, which predates it.
 """
 
 import logging

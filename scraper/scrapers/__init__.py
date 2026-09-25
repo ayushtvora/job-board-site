@@ -68,8 +68,9 @@ from . import autodesk
 
 # Adding a new company: write scrapers/<slug>.py exposing scrape() -> list[NormalizedJob],
 # add it here, and add a matching row to the companies table. Companies on a
-# common ATS can use the shared helpers (workday_cxs, greenhouse, ashby,
-# jobs2web, phenom, dayforce) so their module is just config + notes.
+# common ATS should use the shared helper for it (workday_cxs, greenhouse,
+# ashby, lever, jobs2web, phenom, eightfold, oracle_recruiting, dayforce), so
+# their module is just config + investigation notes.
 SCRAPERS: dict[str, Callable[[], list[NormalizedJob]]] = {
     "rbc": rbc.scrape,
     "soti": soti.scrape,

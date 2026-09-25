@@ -20,60 +20,14 @@ scraping approach" section (Reddit bullet) for how this was found.
   unreliable/null on real jobs.
 """
 
-import logging
-
-import httpx
-
 from .base import NormalizedJob
-
-logger = logging.getLogger(__name__)
-
-BOARD_TOKEN = "reddit"
-JOBS_URL = f"https://boards-api.greenhouse.io/v1/boards/{BOARD_TOKEN}/jobs"
-DEPARTMENTS_URL = f"https://boards-api.greenhouse.io/v1/boards/{BOARD_TOKEN}/departments"
-ENGINEERING_DEPARTMENT_NAME = "Engineering"
+from .greenhouse import location_name_is_canada, scrape_greenhouse
 
 
 def scrape() -> list[NormalizedJob]:
-    with httpx.Client(timeout=30) as client:
-        dept_response = client.get(DEPARTMENTS_URL)
-        dept_response.raise_for_status()
-        engineering_ids = _engineering_department_ids(dept_response.json()["departments"])
-
-        jobs_response = client.get(JOBS_URL, params={"content": "true"})
-        jobs_response.raise_for_status()
-        raw_jobs = jobs_response.json()["jobs"]
-
-    jobs: list[NormalizedJob] = []
-    for raw in raw_jobs:
-        dept_ids = {d["id"] for d in raw.get("departments") or []}
-        if not dept_ids & engineering_ids:
-            continue
-        location = raw.get("location", {}).get("name", "")
-        if "canada" not in location.lower():
-            continue
-        jobs.append(_normalize(raw, location))
-
-    logger.info("Reddit: fetched %d jobs (of %d total on the board)", len(jobs), len(raw_jobs))
-    return jobs
-
-
-def _engineering_department_ids(departments: list[dict]) -> set[int]:
-    for dept in departments:
-        if dept["name"] == ENGINEERING_DEPARTMENT_NAME:
-            return {dept["id"]} | set(dept.get("child_ids") or [])
-    raise ValueError(f"Could not find a '{ENGINEERING_DEPARTMENT_NAME}' department on Reddit's board — structure may have changed")
-
-
-def _normalize(raw: dict, location: str) -> NormalizedJob:
-    posted_date = raw.get("first_published")
-    departments = ", ".join(d["name"] for d in raw.get("departments") or [])
-    return {
-        "external_id": str(raw["id"]),
-        "title": raw["title"],
-        "url": raw["absolute_url"],
-        "location": location,
-        "category": departments,
-        "posted_date": posted_date[:10] if posted_date else None,
-        "platform": "Greenhouse",
-    }
+    return scrape_greenhouse(
+        name="Reddit",
+        board_token="reddit",
+        departments={"Engineering"},
+        is_canada=location_name_is_canada,
+    )

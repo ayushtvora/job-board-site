@@ -24,56 +24,19 @@ how this was found.
   here is expected, not a scraper bug.
 """
 
-import logging
-
-import httpx
-
 from .base import NormalizedJob
-
-logger = logging.getLogger(__name__)
-
-BOARD_TOKEN = "riotgames"
-JOBS_URL = f"https://boards-api.greenhouse.io/v1/boards/{BOARD_TOKEN}/jobs"
+from .greenhouse import location_name_is_canada, metadata_value, scrape_greenhouse
 
 # Craft values (from each job's metadata[]) treated as software-engineering-ish.
 ENGINEERING_CRAFTS = {"Software Engineering Group", "Engineering", "Infrastructure"}
 
 
 def scrape() -> list[NormalizedJob]:
-    with httpx.Client(timeout=30) as client:
-        response = client.get(JOBS_URL, params={"content": "true"})
-        response.raise_for_status()
-        raw_jobs = response.json()["jobs"]
-
-    jobs: list[NormalizedJob] = []
-    for raw in raw_jobs:
-        craft = _get_craft(raw)
-        if craft not in ENGINEERING_CRAFTS:
-            continue
-        location = raw.get("location", {}).get("name", "")
-        if "canada" not in location.lower():
-            continue
-        jobs.append(_normalize(raw, craft, location))
-
-    logger.info("Riot Games: fetched %d jobs (of %d total on the board)", len(jobs), len(raw_jobs))
-    return jobs
-
-
-def _get_craft(raw: dict) -> str | None:
-    for entry in raw.get("metadata") or []:
-        if entry.get("name") == "Craft":
-            return entry.get("value")
-    return None
-
-
-def _normalize(raw: dict, craft: str, location: str) -> NormalizedJob:
-    posted_date = raw.get("first_published")
-    return {
-        "external_id": str(raw["id"]),
-        "title": raw["title"],
-        "url": raw["absolute_url"],
-        "location": location,
-        "category": craft or "",
-        "posted_date": posted_date[:10] if posted_date else None,
-        "platform": "Greenhouse",
-    }
+    return scrape_greenhouse(
+        name="Riot Games",
+        board_token="riotgames",
+        departments=None,
+        job_filter=lambda raw: metadata_value(raw, "Craft") in ENGINEERING_CRAFTS,
+        is_canada=location_name_is_canada,
+        category_fn=lambda raw: metadata_value(raw, "Craft") or "",
+    )

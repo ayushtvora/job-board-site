@@ -1123,10 +1123,12 @@ where noted for Meta.
 
 ### Shared ATS helpers (added 2026-09-25)
 
-The fourth wave added ~30 companies, most on an ATS already covered, so
-per-platform helpers now live in `scraper/scrapers/` and each company
-module is just config + its investigation notes (docstring). Pre-existing
-scrapers were left as they are. Each helper's docstring explains the API:
+Per-platform helpers live in `scraper/scrapers/`, and every company on a
+shared ATS uses one, so its module is just config + its investigation
+notes (docstring). **A new company on one of these platforms should be a
+small config module calling the helper**, not a copy of another company's
+scraper. Each helper's docstring explains the API and the per-tenant hooks
+(`job_filter`, `category_fn`, etc.):
 
 - `workday_cxs.py` — Workday CXS (list + per-job detail). Takes `jobReqId`
   from the detail endpoint as `external_id` (the req ID's position in
@@ -1144,6 +1146,14 @@ scrapers were left as they are. Each helper's docstring explains the API:
   landing pages, or `/search/` + `startrow` when there are none.
 - `phenom.py` — `phApp.ddo` blob, `?category=` per request.
 - `dayforce.py` — Dayforce candidate portal JSON API (see Questrade below).
+- `eightfold.py` — Eightfold `/api/pcsx/search` (Microsoft, Autodesk).
+  Liberty Mutual's older `/api/apply/v2/jobs` API is not covered.
+- `oracle_recruiting.py` — Oracle Recruiting Cloud REST `findReqs` finder
+  (Oracle, Metrolinx).
+- `lever.py` — Lever postings API (Spotify).
+- Still bespoke: the custom in-house sites (Amazon, Google, Apple, IBM,
+  Meta, Shopify, SAP), EA and National Bank (Avature, but different page
+  templates and date sources), Liberty Mutual, Kinaxis, and Ubisoft.
 - `base.CANADA_PATTERN` is the shared free-text Canada matcher. It uses
   whole-word province codes, so "San Francisco, CA" doesn't match.
 

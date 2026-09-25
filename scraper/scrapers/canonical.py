@@ -33,16 +33,8 @@ Google, Apple, Microsoft, IBM, Canonical scraping approach" section
   from `updated_at`).
 """
 
-import logging
-
-import httpx
-
 from .base import NormalizedJob
-
-logger = logging.getLogger(__name__)
-
-BOARD_TOKEN = "canonical"
-JOBS_URL = f"https://boards-api.greenhouse.io/v1/boards/{BOARD_TOKEN}/jobs"
+from .greenhouse import scrape_greenhouse
 
 # Literal on-site office string for Canada — see the fuzzy-matching caveat
 # in the module docstring for why the broader "Home Based - Americas"
@@ -51,43 +43,18 @@ CANADA_OFFICE = "Office Based - Toronto, Canada"
 
 
 def scrape() -> list[NormalizedJob]:
-    with httpx.Client(timeout=30) as client:
-        response = client.get(JOBS_URL, params={"content": "true"})
-        response.raise_for_status()
-        raw_jobs = response.json()["jobs"]
-
-    jobs = [raw for raw in raw_jobs if _is_engineering(raw) and _is_canada(raw)]
-
-    logger.info(
-        "Canonical: fetched %d matching jobs (of %d total; Canada matching is a "
-        "floor, not exact — see module docstring)",
-        len(jobs),
-        len(raw_jobs),
+    return scrape_greenhouse(
+        name="Canonical",
+        board_token="canonical",
+        departments=None,
+        job_filter=_is_engineering,
+        is_canada=lambda raw: CANADA_OFFICE in ((raw.get("location") or {}).get("name") or ""),
     )
-    return [_normalize(raw) for raw in jobs]
 
 
 def _is_engineering(raw: dict) -> bool:
-    for dept in raw.get("departments", []):
+    for dept in raw.get("departments") or []:
         name = dept["name"]
         if "engineering" in name.lower() or name == "SRE":
             return True
     return False
-
-
-def _is_canada(raw: dict) -> bool:
-    return CANADA_OFFICE in raw["location"]["name"]
-
-
-def _normalize(raw: dict) -> NormalizedJob:
-    departments = ", ".join(dept["name"] for dept in raw.get("departments", []))
-    posted_date = raw.get("first_published")
-    return {
-        "external_id": str(raw["id"]),
-        "title": raw["title"],
-        "url": raw["absolute_url"],
-        "location": raw["location"]["name"],
-        "category": departments,
-        "posted_date": posted_date[:10] if posted_date else None,
-        "platform": "Greenhouse",
-    }

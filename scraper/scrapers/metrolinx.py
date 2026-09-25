@@ -22,22 +22,10 @@ section for how this was found.
   `Organization` are null on every job, confirmed live).
 """
 
-import logging
 import re
 
-import httpx
-
 from .base import NormalizedJob
-
-logger = logging.getLogger(__name__)
-
-BASE_URL = "https://ehtc.fa.ca2.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
-SITE_NUMBER = "CX_1"
-EXPAND = "requisitionList.secondaryLocations,flexFieldsFacet.values"
-FACETS_LIST = "LOCATIONS;WORK_LOCATIONS;TITLES;CATEGORIES;ORGANIZATIONS;POSTING_DATES;FLEX_FIELDS"
-
-PAGE_SIZE = 25
-MAX_PAGES = 20  # safety cap; site currently has ~38 total jobs
+from .oracle_recruiting import scrape_oracle_recruiting
 
 # CLAUDE.md's recommended keyword list for spotting IT-adjacent titles at a
 # site with no real tech/IT category facet. "IT" alone is matched as a
@@ -47,69 +35,12 @@ _KEYWORD_PATTERN = re.compile(r"I&IT|\bIT\b|Software|Developer|Systems", re.IGNO
 
 
 def scrape() -> list[NormalizedJob]:
-    jobs: list[NormalizedJob] = []
-    seen_ids: set[str] = set()
-    offset = 0
-    total: int | None = None
-
-    with httpx.Client(timeout=30) as client:
-        for _ in range(MAX_PAGES):
-            finder = (
-                f"findReqs;siteNumber={SITE_NUMBER},"
-                f"facetsList={FACETS_LIST},"
-                f"limit={PAGE_SIZE},offset={offset},sortBy=POSTING_DATES_DESC"
-            )
-            response = client.get(
-                BASE_URL,
-                params={
-                    "onlyData": "true",
-                    "expand": EXPAND,
-                    "finder": finder,
-                },
-            )
-            response.raise_for_status()
-            item = response.json()["items"][0]
-
-            # Only trust `total` from the first page — same convention as
-            # the Workday scrapers' TD-bug fix.
-            if total is None:
-                total = item.get("TotalJobsCount", 0)
-            requisitions = item.get("requisitionList") or []
-            if not requisitions:
-                break
-
-            for raw in requisitions:
-                job_id = str(raw["Id"])
-                if job_id in seen_ids:
-                    continue
-                seen_ids.add(job_id)
-                title = raw.get("Title", "")
-                match = _KEYWORD_PATTERN.search(title)
-                if not match:
-                    continue
-                jobs.append(_normalize(raw, match.group(0)))
-
-            offset += PAGE_SIZE
-            if offset >= total:
-                break
-        else:
-            logger.warning("Metrolinx scrape hit MAX_PAGES=%d without finishing — got %d jobs", MAX_PAGES, len(jobs))
-
-    logger.info(
-        "Metrolinx: fetched %d IT-adjacent jobs (site reported total=%s before keyword filter)",
-        len(jobs),
-        total,
+    return scrape_oracle_recruiting(
+        name="Metrolinx",
+        host="ehtc.fa.ca2.oraclecloud.com",
+        facets_list="LOCATIONS;WORK_LOCATIONS;TITLES;CATEGORIES;ORGANIZATIONS;POSTING_DATES;FLEX_FIELDS",
+        expand="requisitionList.secondaryLocations,flexFieldsFacet.values",
+        sort_by="POSTING_DATES_DESC",
+        job_filter=lambda raw: bool(_KEYWORD_PATTERN.search(raw.get("Title") or "")),
+        category_fn=lambda raw: _KEYWORD_PATTERN.search(raw["Title"]).group(0),
     )
-    return jobs
-
-
-def _normalize(raw: dict, matched_keyword: str) -> NormalizedJob:
-    return {
-        "external_id": str(raw["Id"]),
-        "title": raw["Title"],
-        "url": f"https://ehtc.fa.ca2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/{SITE_NUMBER}/job/{raw['Id']}",
-        "location": raw.get("PrimaryLocation", ""),
-        "category": matched_keyword,
-        "posted_date": raw.get("PostedDate"),
-        "platform": "Oracle Recruiting Cloud",
-    }

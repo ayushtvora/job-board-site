@@ -33,81 +33,15 @@ AMD, Uber scraping approach" section):
   `"Workday"`.
 """
 
-import json
-import logging
-
-import httpx
-
 from .base import NormalizedJob
-
-logger = logging.getLogger(__name__)
-
-LIST_URL = "https://careers.adobe.com/us/en/search-results"
-CATEGORY = "Engineering and Product"
-PAGE_SIZE = 10
-DDO_MARKER = "phApp.ddo = "
-MAX_PAGES = 100  # safety cap; this category currently has ~324 jobs
+from .phenom import scrape_phenom
 
 
 def scrape() -> list[NormalizedJob]:
-    jobs: list[NormalizedJob] = []
-    seen_ids: set[str] = set()
-    offset = 0
-    total_hits: int | None = None
-
-    with httpx.Client(timeout=30, follow_redirects=True) as client:
-        for _ in range(MAX_PAGES):
-            # Deliberately no "s" param — see module docstring's pagination quirk.
-            response = client.get(LIST_URL, params={"category": CATEGORY, "from": offset})
-            response.raise_for_status()
-
-            search = _extract_ddo(response.text)["eagerLoadRefineSearch"]
-            total_hits = search["totalHits"]
-            page_jobs = search["data"]["jobs"]
-            if not page_jobs:
-                break
-
-            for raw in page_jobs:
-                job_id = raw["jobId"]
-                if job_id in seen_ids:
-                    continue
-                seen_ids.add(job_id)
-                if raw.get("country") != "Canada":
-                    continue
-                jobs.append(_normalize(raw))
-
-            offset += PAGE_SIZE
-            if offset >= total_hits:
-                break
-        else:
-            logger.warning("Adobe scrape hit MAX_PAGES=%d without finishing — got %d jobs", MAX_PAGES, len(jobs))
-
-    logger.info("Adobe: fetched %d Canada jobs (site reported totalHits=%s)", len(jobs), total_hits)
-    return jobs
-
-
-def _extract_ddo(html: str) -> dict:
-    idx = html.find(DDO_MARKER)
-    if idx == -1:
-        raise ValueError("Could not find phApp.ddo in Adobe page — site structure may have changed")
-    start = idx + len(DDO_MARKER)
-    ddo, _end = json.JSONDecoder().raw_decode(html, start)
-    return ddo
-
-
-def _normalize(raw: dict) -> NormalizedJob:
-    location = (
-        raw.get("location")
-        or ", ".join(raw.get("multi_location", []))
-        or raw.get("cityStateCountry", "")
+    return scrape_phenom(
+        name="Adobe",
+        list_url="https://careers.adobe.com/us/en/search-results",
+        categories=["Engineering and Product"],
+        platform="Workday",
+        job_filter=lambda raw: raw.get("country") == "Canada",
     )
-    posted_date = raw.get("postedDate")
-    return {
-        "external_id": raw["jobId"],
-        "title": raw["title"],
-        "url": raw["applyUrl"],
-        "location": location,
-        "category": raw.get("category", ""),
-        "posted_date": posted_date[:10] if posted_date else None,
-        "platform": "Workday",
-    }

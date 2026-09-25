@@ -17,15 +17,13 @@ Canadian (Oakville HQ, Toronto, Waterloo, Burnaby).
   a test posting) — they still match as Canada and are kept as-is.
 """
 
-from .base import CANADA_PATTERN, NormalizedJob
-from .greenhouse import scrape_greenhouse
+from .base import NormalizedJob
+from .greenhouse import location_name_is_canada, scrape_greenhouse
 
 DEPARTMENTS = {"Technology Development", "IT", "Security"}
 
 
 def scrape() -> list[NormalizedJob]:
-    return scrape_greenhouse(name="Geotab", board_token="geotab", departments=DEPARTMENTS, is_canada=_is_canada)
-
-
-def _is_canada(raw: dict) -> bool:
-    return bool(CANADA_PATTERN.search((raw.get("location") or {}).get("name") or ""))
+    return scrape_greenhouse(
+        name="Geotab", board_token="geotab", departments=DEPARTMENTS, is_canada=location_name_is_canada
+    )

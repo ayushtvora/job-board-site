@@ -15,8 +15,8 @@ scrapers/greenhouse.py. Investigated 2026-09-25: 47 jobs total.
   "Product Team" is excluded; there's no finer engineering-only parent.
 """
 
-from .base import CANADA_PATTERN, NormalizedJob
-from .greenhouse import scrape_greenhouse
+from .base import NormalizedJob
+from .greenhouse import location_name_is_canada, scrape_greenhouse
 
 DEPARTMENTS = {"EPD"}
 EXCLUDE_DEPARTMENTS = {"Product Team"}
@@ -28,9 +28,5 @@ def scrape() -> list[NormalizedJob]:
         board_token="dropbox",
         departments=DEPARTMENTS,
         exclude_departments=EXCLUDE_DEPARTMENTS,
-        is_canada=_is_canada,
+        is_canada=location_name_is_canada,
     )
-
-
-def _is_canada(raw: dict) -> bool:
-    return bool(CANADA_PATTERN.search((raw.get("location") or {}).get("name") or ""))

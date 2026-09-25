@@ -1,4 +1,4 @@
-"""Shared helper for Greenhouse Board API scrapers (the fourth wave onward).
+"""Shared helper for Greenhouse Board API scrapers.
 
 Same API as the Airbnb/Databricks/Stripe/Reddit scrapers (see CLAUDE.md's
 "Airbnb, Databricks, Stripe scraping approach"):
@@ -18,7 +18,10 @@ Same API as the Airbnb/Databricks/Stripe/Reddit scrapers (see CLAUDE.md's
   unreliable — see the Stripe/Airbnb notes in CLAUDE.md), and
   `first_published` is the true original posting date.
 
-Not used by the pre-existing Greenhouse scrapers, which predate it.
+Boards without a usable department tree can pass `departments=None` and
+filter with `job_filter` instead (e.g. Riot's "Craft" metadata field, or
+Stripe's title/department-name heuristic), and `category_fn` overrides the
+default category (the job's department names).
 """
 
 import logging
@@ -35,10 +38,14 @@ def scrape_greenhouse(
     *,
     name: str,
     board_token: str,
-    departments: set[str],
+    departments: set[str] | None,
     exclude_departments: set[str] = frozenset(),
     is_canada: Callable[[dict], bool] | None = None,
+    job_filter: Callable[[dict], bool] | None = None,
+    category_fn: Callable[[dict], str] | None = None,
 ) -> list[NormalizedJob]:
+    """`departments=None` skips department filtering. `job_filter(raw)` and
+    `is_canada(raw)` drop jobs client-side; see the module docstring."""
     base = f"https://boards-api.greenhouse.io/v1/boards/{board_token}"
     with httpx.Client(timeout=60) as client:
         jobs_response = client.get(f"{base}/jobs", params={"content": "true"})
@@ -52,10 +59,12 @@ def scrape_greenhouse(
     matched = [
         raw
         for raw in raw_jobs
-        if _in_departments(raw, dept_tree, departments, exclude_departments) and canada_check(raw)
+        if (departments is None or _in_departments(raw, dept_tree, departments, exclude_departments))
+        and (job_filter is None or job_filter(raw))
+        and canada_check(raw)
     ]
     logger.info("%s: fetched %d matching jobs (of %d total)", name, len(matched), len(raw_jobs))
-    return [_normalize(raw) for raw in matched]
+    return [_normalize(raw, category_fn) for raw in matched]
 
 
 def location_strings(raw: dict) -> list[str]:
@@ -68,6 +77,12 @@ def location_strings(raw: dict) -> list[str]:
 
 def default_is_canada(raw: dict) -> bool:
     return any(CANADA_PATTERN.search(s) for s in location_strings(raw))
+
+
+def location_name_is_canada(raw: dict) -> bool:
+    """Canada check on `location.name` only, for boards whose `offices` are
+    misleading (e.g. US postings that still list a Canadian office)."""
+    return bool(CANADA_PATTERN.search((raw.get("location") or {}).get("name") or ""))
 
 
 def _ancestor_names(dept_id: int, dept_tree: dict) -> list[str]:
@@ -91,7 +106,19 @@ def _in_departments(raw: dict, dept_tree: dict, include: set[str], exclude: set[
     return False
 
 
-def _normalize(raw: dict) -> NormalizedJob:
+def department_names(raw: dict) -> str:
+    return ", ".join(d["name"].strip() for d in raw.get("departments") or [])
+
+
+def metadata_value(raw: dict, field_name: str) -> str | None:
+    """Value of a custom `metadata[]` field (needs `content=true`)."""
+    for entry in raw.get("metadata") or []:
+        if entry.get("name") == field_name:
+            return entry.get("value")
+    return None
+
+
+def _normalize(raw: dict, category_fn: Callable[[dict], str] | None) -> NormalizedJob:
     location = (raw.get("location") or {}).get("name") or ""
     offices = [o["name"] for o in raw.get("offices") or [] if o.get("name")]
     # Some boards put only "Hybrid"/"Distributed" in location.name — append
@@ -104,7 +131,7 @@ def _normalize(raw: dict) -> NormalizedJob:
         "title": raw["title"].strip(),
         "url": raw["absolute_url"],
         "location": location,
-        "category": ", ".join(d["name"].strip() for d in raw.get("departments") or []),
+        "category": category_fn(raw) if category_fn else department_names(raw),
         "posted_date": posted_date[:10] if posted_date else None,
         "platform": "Greenhouse",
     }

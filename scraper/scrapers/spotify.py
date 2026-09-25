@@ -17,54 +17,13 @@ bullet) for how this was found.
   not Engineering) — a legitimate empty result, not a bug.
 """
 
-import logging
-from datetime import datetime, timezone
-
-import httpx
-
 from .base import NormalizedJob
-
-logger = logging.getLogger(__name__)
-
-LIST_URL = "https://api.lever.co/v0/postings/spotify"
-
-COUNTRY_CODE = "CA"
-CATEGORY_KEYWORD = "engineering"
+from .lever import scrape_lever
 
 
 def scrape() -> list[NormalizedJob]:
-    jobs: list[NormalizedJob] = []
-
-    with httpx.Client(timeout=30) as client:
-        response = client.get(LIST_URL, params={"mode": "json"})
-        response.raise_for_status()
-        postings = response.json()
-
-        for raw in postings:
-            if raw.get("country") != COUNTRY_CODE:
-                continue
-            department = (raw.get("categories") or {}).get("department") or ""
-            if CATEGORY_KEYWORD not in department.lower():
-                continue
-            jobs.append(_normalize(raw))
-
-    logger.info("Spotify: fetched %d Canada + Engineering jobs (of %d total postings)", len(jobs), len(postings))
-    return jobs
-
-
-def _normalize(raw: dict) -> NormalizedJob:
-    categories = raw.get("categories") or {}
-    created_at = raw.get("createdAt")
-    posted_date = None
-    if created_at:
-        posted_date = datetime.fromtimestamp(created_at / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
-
-    return {
-        "external_id": raw["id"],
-        "title": raw["text"],
-        "url": raw.get("hostedUrl", ""),
-        "location": categories.get("location", ""),
-        "category": categories.get("department", ""),
-        "posted_date": posted_date,
-        "platform": "Lever",
-    }
+    return scrape_lever(
+        name="Spotify",
+        company="spotify",
+        department_filter=lambda department: "engineering" in department.lower(),
+    )

@@ -1,0 +1,106 @@
+"""Shared helper for Eightfold career-site scrapers (the `pcsx` search API).
+
+Same API as Microsoft and Autodesk (see CLAUDE.md's "Microsoft scraping
+approach" and the Autodesk notes): the client-rendered careers SPA calls
+`GET <base_url>/api/pcsx/search?domain=<domain>&query=&location=<text>&start=<offset>`,
+found via a Playwright network capture. `location` is free text (no opaque
+facet IDs); `start` is an offset, and the page size is fixed by the server
+(10 at Microsoft), so paging advances by however many came back and stops
+once a page adds no new IDs. Response shape is `{"data": {"positions": [...]}}`.
+
+- Tenants differ in which facets work: Microsoft's `department=` param is
+  silently ignored (filter client-side with `job_filter`), while Autodesk's
+  repeatable `filter_job_category=` works (pass it in `extra_params`).
+- `external_id` is the human req number (`displayJobId`, else `atsJobId`),
+  falling back to Eightfold's own `id`.
+- `postedTs` is a Unix timestamp but is 0 on some tenants (Autodesk), so
+  `creationTs` is the fallback.
+- Postings can list many locations; Canadian ones are shown first, up to
+  three, with a count of the rest.
+
+Liberty Mutual's older Eightfold `/api/apply/v2/jobs` API has different
+field names and isn't covered here (see scrapers/libertymutual.py).
+"""
+
+import logging
+from collections.abc import Callable
+from datetime import datetime, timezone
+
+import httpx
+
+from .base import CANADA_PATTERN, NormalizedJob
+
+logger = logging.getLogger(__name__)
+
+MAX_PAGES = 50
+MAX_LOCATIONS_SHOWN = 3
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
+    "Accept": "application/json",
+}
+
+
+def scrape_eightfold(
+    *,
+    name: str,
+    base_url: str,
+    domain: str,
+    location: str = "Canada",
+    extra_params: list[tuple[str, str]] = (),
+    category_label: str | None = None,
+    job_filter: Callable[[dict], bool] | None = None,
+) -> list[NormalizedJob]:
+    """`category_label` overrides the per-job `department` as the category
+    (for tenants where `department` isn't meaningful). `job_filter(raw)` can
+    drop jobs client-side."""
+    jobs: list[NormalizedJob] = []
+    seen_ids: set[str] = set()
+    start = 0
+
+    with httpx.Client(timeout=30, headers=HEADERS) as client:
+        for _ in range(MAX_PAGES):
+            params = [("domain", domain), ("query", ""), ("location", location), ("start", str(start)), *extra_params]
+            response = client.get(f"{base_url}/api/pcsx/search", params=params)
+            response.raise_for_status()
+            postings = (response.json().get("data") or {}).get("positions") or []
+            if not postings:
+                break
+            new_on_page = 0
+            for raw in postings:
+                job_id = str(raw.get("displayJobId") or raw.get("atsJobId") or raw["id"])
+                if job_id in seen_ids:
+                    continue
+                seen_ids.add(job_id)
+                new_on_page += 1
+                if job_filter is None or job_filter(raw):
+                    jobs.append(_normalize(raw, job_id, base_url, category_label))
+            if new_on_page == 0:
+                break
+            start += len(postings)
+        else:
+            logger.warning("%s scrape hit MAX_PAGES=%d without finishing — got %d jobs", name, MAX_PAGES, len(jobs))
+
+    logger.info("%s: fetched %d jobs", name, len(jobs))
+    return jobs
+
+
+def _normalize(raw: dict, job_id: str, base_url: str, category_label: str | None) -> NormalizedJob:
+    locations = raw.get("locations") or []
+    if isinstance(locations, str):
+        locations = [locations]
+    canadian = [loc for loc in locations if CANADA_PATTERN.search(loc)] or locations
+    location = "; ".join(canadian[:MAX_LOCATIONS_SHOWN])
+    if len(canadian) > MAX_LOCATIONS_SHOWN:
+        location += f" (+{len(canadian) - MAX_LOCATIONS_SHOWN} more)"
+
+    timestamp = raw.get("postedTs") or raw.get("creationTs")
+    position_url = raw.get("positionUrl") or f"/careers/job/{raw['id']}"
+    return {
+        "external_id": job_id,
+        "title": (raw.get("name") or "").strip(),
+        "url": position_url if position_url.startswith("http") else f"{base_url}{position_url}",
+        "location": location,
+        "category": category_label or raw.get("department") or "",
+        "posted_date": datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m-%d") if timestamp else None,
+        "platform": "Eightfold",
+    }

@@ -25,92 +25,23 @@ unauthenticated REST API (found via the CSP header on the marketing page)
   suite) it's only trusted from the first page.
 """
 
-import logging
-
-import httpx
-
 from .base import NormalizedJob
+from .oracle_recruiting import scrape_oracle_recruiting
 
-logger = logging.getLogger(__name__)
-
-BASE_URL = "https://eeho.fa.us2.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
-SITE_NUMBER = "CX_1"
-CATEGORY_LABEL = "Product and Research"
 CATEGORY_FACET_ID = "302958497961752"  # "Product and Research"
 LOCATION_FACET_ID = "300000000106749"  # "Canada" (fuzzy — see module docstring)
 
-PAGE_SIZE = 20
-MAX_PAGES = 20  # safety cap; this candidate set is currently in the single digits
-
 
 def scrape() -> list[NormalizedJob]:
-    jobs: list[NormalizedJob] = []
-    seen_ids: set[str] = set()
-    offset = 0
-    total: int | None = None
-
-    with httpx.Client(timeout=30) as client:
-        for _ in range(MAX_PAGES):
-            finder = (
-                f"findReqs;siteNumber={SITE_NUMBER},"
-                "facetsList=LOCATIONS;CATEGORIES,"
-                f"selectedCategoriesFacet={CATEGORY_FACET_ID},"
-                f"selectedLocationsFacet={LOCATION_FACET_ID},"
-                f"limit={PAGE_SIZE},offset={offset}"
-            )
-            response = client.get(
-                BASE_URL,
-                params={
-                    "onlyData": "true",
-                    "expand": "requisitionList",
-                    "finder": finder,
-                },
-            )
-            response.raise_for_status()
-            item = response.json()["items"][0]
-
-            # Only trust `total` from the first page — same convention as
-            # the Workday scrapers' TD-bug fix (some tenants/APIs report a
-            # stale or zeroed-out total on later pages).
-            if total is None:
-                total = item.get("TotalJobsCount", 0)
-            requisitions = item.get("requisitionList") or []
-            if not requisitions:
-                break
-
-            for raw in requisitions:
-                job_id = str(raw["Id"])
-                if job_id in seen_ids:
-                    continue
-                seen_ids.add(job_id)
-                primary_location = raw.get("PrimaryLocation") or ""
-                if "canada" not in primary_location.lower():
-                    # Part of Oracle's fuzzy location-facet match, not
-                    # actually Canada — see module docstring.
-                    continue
-                jobs.append(_normalize(raw))
-
-            offset += PAGE_SIZE
-            if offset >= total:
-                break
-        else:
-            logger.warning("Oracle scrape hit MAX_PAGES=%d without finishing — got %d jobs", MAX_PAGES, len(jobs))
-
-    logger.info(
-        "Oracle: fetched %d Canada jobs (site reported candidate total=%s before client-side location filter)",
-        len(jobs),
-        total,
+    return scrape_oracle_recruiting(
+        name="Oracle",
+        host="eeho.fa.us2.oraclecloud.com",
+        finder_filters={
+            "selectedCategoriesFacet": CATEGORY_FACET_ID,
+            "selectedLocationsFacet": LOCATION_FACET_ID,
+        },
+        page_size=20,
+        category_label="Product and Research",
+        # The location facet is fuzzy and also returns some US jobs.
+        job_filter=lambda raw: "canada" in (raw.get("PrimaryLocation") or "").lower(),
     )
-    return jobs
-
-
-def _normalize(raw: dict) -> NormalizedJob:
-    return {
-        "external_id": str(raw["Id"]),
-        "title": raw["Title"],
-        "url": f"https://eeho.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/{SITE_NUMBER}/job/{raw['Id']}",
-        "location": raw.get("PrimaryLocation", ""),
-        "category": CATEGORY_LABEL,
-        "posted_date": raw.get("PostedDate"),
-        "platform": "Oracle Recruiting Cloud",
-    }

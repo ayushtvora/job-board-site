@@ -1,4 +1,4 @@
-"""Shared helper for Workday CXS-API scrapers (the fourth wave onward).
+"""Shared helper for Workday CXS-API scrapers.
 
 Same approach as SOTI (scrapers/soti.py — see its docstring for how the
 CXS API was found): POST the list endpoint with `appliedFacets`, paginate by
@@ -18,9 +18,9 @@ config + its own investigation notes:
   primary `location` is often a US city (e.g. Thomson Reuters postings
   that list Toronto as one of five `additionalLocations`), so Canadian
   locations are shown first, with a count of the rest.
-
-Not used by the pre-existing Workday scrapers (soti, cibc, td, manulife,
-nvidia, ubc, intel, sony), which predate it and are left as they are.
+- Postings without an `externalPath` are skipped. CIBC's list response
+  has been seen to include a stub posting with only `bulletFields`
+  (confirmed 2026-09-25), which has no detail endpoint to fetch.
 """
 
 import logging
@@ -44,10 +44,13 @@ def scrape_workday(
     applied_facets: dict[str, list[str]],
     category_label: str,
     job_filter: Callable[[dict, dict], bool] | None = None,
+    category_fn: Callable[[dict, dict], str | None] | None = None,
     max_pages: int = 50,
 ) -> list[NormalizedJob]:
     """Scrape one Workday site. `job_filter(list_item, detail)` can drop jobs
-    client-side, for filters the tenant's facets can't express."""
+    client-side, for filters the tenant's facets can't express.
+    `category_fn(list_item, detail)` can read a real per-job category (e.g.
+    TD's job family in `bulletFields`); `category_label` is the fallback."""
     list_url = f"{base_url}/wday/cxs/{tenant}/{site}/jobs"
     detail_url = f"{base_url}/wday/cxs/{tenant}/{site}{{path}}"
 
@@ -71,7 +74,10 @@ def scrape_workday(
                 break
 
             for raw in postings:
-                path = raw["externalPath"]
+                path = raw.get("externalPath")
+                if path is None:
+                    logger.warning("%s: skipping posting with no externalPath: %s", name, raw)
+                    continue
                 if path in seen_paths:
                     continue
                 seen_paths.add(path)
@@ -80,7 +86,8 @@ def scrape_workday(
                 detail = detail_response.json()["jobPostingInfo"]
                 if job_filter is not None and not job_filter(raw, detail):
                     continue
-                jobs.append(_normalize(raw, detail, category_label))
+                category = (category_fn(raw, detail) if category_fn else None) or category_label
+                jobs.append(_normalize(raw, detail, category))
 
             offset += PAGE_SIZE
             if offset >= total:
@@ -92,14 +99,14 @@ def scrape_workday(
     return jobs
 
 
-def _normalize(raw: dict, detail: dict, category_label: str) -> NormalizedJob:
+def _normalize(raw: dict, detail: dict, category: str) -> NormalizedJob:
     bullet_fields = raw.get("bulletFields") or []
     return {
         "external_id": detail.get("jobReqId") or (bullet_fields[0] if bullet_fields else raw["externalPath"]),
         "title": raw["title"],
         "url": detail.get("externalUrl") or "",
         "location": _location(raw, detail),
-        "category": category_label,
+        "category": category,
         "posted_date": detail.get("startDate"),
         "platform": "Workday",
     }
