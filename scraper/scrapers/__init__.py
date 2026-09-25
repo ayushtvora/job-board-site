@@ -64,6 +64,7 @@ from . import arcticwolf
 from . import workdayinc
 from . import atscorp
 from . import eclipse
+from . import autodesk
 
 # Adding a new company: write scrapers/<slug>.py exposing scrape() -> list[NormalizedJob],
 # add it here, and add a matching row to the companies table. Companies on a
@@ -133,4 +134,5 @@ SCRAPERS: dict[str, Callable[[], list[NormalizedJob]]] = {
     "workday": workdayinc.scrape,
     "atscorp": atscorp.scrape,
     "eclipse": eclipse.scrape,
+    "autodesk": autodesk.scrape,
 }

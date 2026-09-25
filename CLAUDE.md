@@ -327,9 +327,9 @@ not host cron (per the architecture decision above).
     https://salesforce.wd12.myworkdayjobs.com/External_Career_Site
   - **Sun Life**, Canada / IT jobs (Workday) —
     https://sunlife.wd3.myworkdayjobs.com/Experienced-Jobs
-  - **Autodesk** — Workday tenant confirmed (`autodesk.wd1.myworkdayjobs.com/Ext`)
-    but the site was in a Workday outage throughout investigation (retried
-    several times over the session); not yet scraper-ready.
+  - **Autodesk**, Canada / Development Engineering + Technology jobs
+    (Eightfold) — https://jobs.autodesk.com/careers — see "Autodesk" under
+    "ATS Corporation and Eclipse Automation, unblocked" below.
   - Fourth wave, batches 2–6 (all Canada-scoped, tech/engineering
     categories; see "Fourth wave, batches 2–6 scraping approach" below for
     per-company details): **Cohere** (Ashby), **Wealthsimple** (Ashby),
@@ -1247,11 +1247,20 @@ Company-specific findings. Each module's docstring has the full detail.
     Software Engineer") have none. So jobs are filtered by title keyword
     (software/developer/engineer/IT/AI/data/SCADA/controls) instead of
     department.
-- **Autodesk**: still unreachable from this environment as of the end of
-  2026-09-25. `autodesk.wd1.myworkdayjobs.com/Ext` 302s to
-  `myworkday.com/wday/drs/outage?t=autodesk&s=ext`, and the CXS API says
-  `not found: Job_Posting_Site_ID=Ext`. Every other `wdN` data center
-  422s. `autodesk.com/careers` is Akamai-blocked even to headless Chromium.
+- **Autodesk** (`scrapers/autodesk.py`): moved to **Eightfold** at
+  `jobs.autodesk.com/careers` (the URL came from the user). The old
+  Workday site `autodesk.wd1.myworkdayjobs.com/Ext` now 302s to Workday's
+  outage page and its CXS API says the site ID doesn't exist, so don't go
+  back to it. `autodesk.com/careers` is Akamai-blocked even to headless
+  Chromium.
+  - Same `pcsx` search API as Microsoft:
+    `/api/pcsx/search?domain=autodesk.com&location=Canada&start=N`.
+  - `department` holds payroll values here ("Non-Commission"), so scope
+    comes from the repeatable `filter_job_category` param instead:
+    development engineering, artificial intelligence, cybersecurity,
+    technology. That was 7 of 16 Canadian jobs (62 worldwide) on
+    2026-09-25.
+  - `postedTs` is 0, so the date comes from `creationTs`.
 
 ## Deployment
 
