@@ -344,6 +344,29 @@ not host cron (per the architecture decision above).
     **Kinaxis** (iCIMS via Jibe), **OpenText** (Phenom → SuccessFactors),
     **Geotab** (Greenhouse), **D2L** (Greenhouse), **Arctic Wolf**
     (Workday), **Workday** (Workday).
+  - Fifth wave (all Canada-scoped, tech/engineering categories; see "Fifth
+    wave scraping approach" below):
+    - Greenhouse: **Ada**, **League**, **Tenstorrent**, **DoorDash**,
+      **Lyft**, **Okta**, **Asana**, **Samsara**, **Twilio**, **Affirm**,
+      **Figma**, **Datadog**.
+    - Ashby: **Jobber**, **Neo Financial**, **KOHO**, **Benevity**,
+      **Hopper**, **Loopio**, **Thinkific**.
+    - Lever: **Waabi**, **EQ Bank**.
+    - Workday: **Cisco**, **Ciena**, **PayPal**, **Mastercard**, **CPP
+      Investments**, **OMERS**, **Ontario Teachers'**, **Desjardins**,
+      **Loblaw Digital**, **Canadian Tire**, **CAE**, **ApplyBoard**,
+      **BlackBerry** (+ QNX), **Cadence**.
+    - Eightfold: **Qualcomm**, **Ericsson**, **ATB Financial**.
+    - Oracle Recruiting Cloud: **Nokia**, **Definity**, **Fortinet**.
+    - Phenom → Taleo: **Air Canada**.
+    - SuccessFactors Jobs2Web: **Celestica**, **Hydro One**, **City of
+      Toronto**, **Bank of Canada**.
+    - SmartRecruiters: **Arista Networks**.
+    - TalentBrew → Avature: **Intuit**, **Synopsys**.
+    - Other: **Xanadu** (HiBob), **Vidyard** (Kula), **FreshBooks** (Gem).
+  - Investigated but **not scraper-ready**: **CGI**, **Ontario Public
+    Service**, **Tesla**, **CN**, **Siemens**. See "Fifth wave scraping
+    approach" below.
 - More companies and filters will be added later; scraper architecture should
   make adding a new company a matter of adding a new scraper module + a
   `companies` row, not restructuring shared code.
@@ -1151,9 +1174,13 @@ scraper. Each helper's docstring explains the API and the per-tenant hooks
 - `oracle_recruiting.py` — Oracle Recruiting Cloud REST `findReqs` finder
   (Oracle, Metrolinx).
 - `lever.py` — Lever postings API (Spotify).
+- `smartrecruiters.py` — SmartRecruiters posting API (Ubisoft, Arista),
+  scoped by a custom field.
+- `talentbrew.py` — Radancy TalentBrew career sites (Intuit, Synopsys).
 - Still bespoke: the custom in-house sites (Amazon, Google, Apple, IBM,
   Meta, Shopify, SAP), EA and National Bank (Avature, but different page
-  templates and date sources), Liberty Mutual, Kinaxis, and Ubisoft.
+  templates and date sources), Liberty Mutual, Kinaxis, Xanadu (HiBob),
+  Vidyard (Kula) and FreshBooks (Gem).
 - `base.CANADA_PATTERN` is the shared free-text Canada matcher. It uses
   whole-word province codes, so "San Francisco, CA" doesn't match.
 
@@ -1271,6 +1298,56 @@ Company-specific findings. Each module's docstring has the full detail.
     technology. That was 7 of 16 Canadian jobs (62 worldwide) on
     2026-09-25.
   - `postedTs` is 0, so the date comes from `creationTs`.
+
+### Fifth wave scraping approach (investigated 2026-09-25)
+
+Each module's docstring has the details (board tokens, facet IDs, counts).
+Things worth knowing across the batch:
+
+- **Board names aren't always the company name**: Ada is `ada18`, League
+  is `leagueinc`, Neo is `neofinancial`, Arista is `AristaNetworks`.
+  DoorDash has per-region Greenhouse boards, and `doordashcanada` is the
+  Canadian one (the US board's only "Canada" hits are Vancouver, WA).
+- **Ashby `department` isn't always the discipline**: Hopper and Loopio
+  put it in `team`, so `ashby.py` now takes `departments=None` plus a
+  `job_filter`.
+- **Workday tenants without a country facet** (Cisco, Mastercard, PayPal,
+  Ontario Teachers') are filtered by passing every Canadian `locations`
+  ID. That avoids fetching hundreds of detail pages (Cisco has ~670
+  matching jobs worldwide). A new Canadian city on those tenants won't be
+  picked up until its ID is added.
+- **Tenants with no category facet** (ApplyBoard, Hydro One, Bank of
+  Canada) filter by title keyword. Cadence keeps every Canadian posting.
+- **Oracle Recruiting multi-category**: `selectedCategoriesFacet` takes
+  semicolon-joined IDs (Nokia, Definity, Fortinet). Nokia's API lives on
+  the pod host `fa-evmr-saasfaprod1.fa.ocs.oraclecloud.com`, not on
+  jobs.nokia.com.
+- **Currently empty, but working**: Datadog (no Canadian office), PayPal,
+  ApplyBoard, Loblaw Digital (its Workday sites return 0 postings), Vidyard
+  and FreshBooks (no tech postings).
+- **Figma caveat**: its postings' location says SF/NY, but 53 are tagged
+  with a "Canada" office, and those are counted as Canada.
+- **Newly seen platforms**:
+  - HiBob (Xanadu): `GET /api/job-ad` with a `companyidentifier` header.
+  - Kula (Vidyard): jobs embedded in the Next.js RSC payload.
+  - Gem (FreshBooks): `api.gem.com/job_board/v0/<org>/job_posts/`, shaped
+    like Greenhouse.
+  - TalentBrew (Intuit, Synopsys): `/search-jobs/results` XHR, with the
+    Canada GeoNames ID 6251999 as the country facet.
+- **Not scraper-ready** (don't retry without new information):
+  - **CGI** (`cgi.njoyn.com`) and **Ontario Public Service**
+    (`gojobs.gov.on.ca`): both redirect every plain HTTP request to a
+    Radware bot-manager challenge (`validate.perfdrive.com`).
+  - **Tesla**: `tesla.com/cua-api/...` is Akamai "Access Denied".
+  - **CN**: Cornerstone (`cn360.csod.com`). The page's anonymous token
+    works against `us.api.csod.com/rec-job-search/external/jobs`, but every
+    payload tried returned `totalCount: 0`. It needs a Playwright capture
+    of the real search request, and Playwright couldn't launch in the
+    sandbox this was investigated from.
+  - **Siemens**: Avature (`jobs.siemens.com`). Like EA, its country and
+    category facet IDs are AJAX-only and need a Playwright pass. The
+    free-text `SearchJobs/Canada` keyword search paginates in steps of 6,
+    and `jobOffset` repeats pages.
 
 ## Deployment
 

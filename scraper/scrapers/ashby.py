@@ -10,9 +10,15 @@ and `jobUrl`.
 No server-side filtering, so Canada and department are matched client-side:
 Canada if the primary address or any secondary location's address has
 `addressCountry == "Canada"`, or any location name mentions Canada.
+
+Some orgs use `department` for a product area and put the discipline in
+`team` (Hopper: "Travel Tech / Engineering"; Loopio: "Product / Product
+Engineering"), so `departments=None` plus a `job_filter` can match on
+anything in the raw posting instead.
 """
 
 import logging
+from collections.abc import Callable
 
 import httpx
 
@@ -21,7 +27,15 @@ from .base import NormalizedJob
 logger = logging.getLogger(__name__)
 
 
-def scrape_ashby(*, name: str, org: str, departments: set[str]) -> list[NormalizedJob]:
+def scrape_ashby(
+    *,
+    name: str,
+    org: str,
+    departments: set[str] | None,
+    job_filter: Callable[[dict], bool] | None = None,
+) -> list[NormalizedJob]:
+    """`departments=None` skips department matching; `job_filter(raw)` can
+    drop jobs client-side."""
     with httpx.Client(timeout=30) as client:
         response = client.get(f"https://api.ashbyhq.com/posting-api/job-board/{org}")
         response.raise_for_status()
@@ -30,7 +44,10 @@ def scrape_ashby(*, name: str, org: str, departments: set[str]) -> list[Normaliz
     matched = [
         raw
         for raw in raw_jobs
-        if raw.get("isListed", True) and (raw.get("department") or "").strip() in departments and _is_canada(raw)
+        if raw.get("isListed", True)
+        and (departments is None or (raw.get("department") or "").strip() in departments)
+        and (job_filter is None or job_filter(raw))
+        and _is_canada(raw)
     ]
     logger.info("%s: fetched %d matching jobs (of %d total)", name, len(matched), len(raw_jobs))
     return [_normalize(raw) for raw in matched]
