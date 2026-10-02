@@ -263,12 +263,13 @@ not host cron (per the architecture decision above).
     sonyjobs.com's embedded Workday iframe) —
     https://sonyglobal.wd1.myworkdayjobs.com/SonyGlobalCareers — see "Sony
     scraping approach" below.
-  - **AMD** — investigation blocked, not scraper-ready: iCIMS backend
-    returns an AWS WAF captcha challenge to every automated request; see
-    "AMD scraping approach" below.
-  - **Uber** — investigation blocked, not scraper-ready: custom in-house
-    app with an app-level CSRF gate on its job search API; see "Uber
-    scraping approach" below.
+  - **AMD**, Canada / Engineering jobs (iCIMS via Jibe) — unblocked
+    2026-10-02 through careers.amd.com's own Jibe API; see "Sixth wave
+    scraping approach" below (the original blocked investigation is under
+    "AMD scraping approach").
+  - **Uber**, Canada / engineering teams (custom in-house, needs a
+    browser) — unblocked 2026-10-02 after Uber moved to jobs.uber.com; see
+    "Sixth wave scraping approach" below.
   - **Airbnb**, Canada / Software Engineering jobs (Greenhouse) —
     https://boards-api.greenhouse.io/v1/boards/airbnb — see "Airbnb, Databricks,
     Stripe scraping approach" below. Currently 0 jobs match Canada +
@@ -292,11 +293,10 @@ not host cron (per the architecture decision above).
   - **Eclipse Automation**, Canada / software & engineering roles
     (Dayforce) — unblocked 2026-09-25 once Dayforce's maintenance ended;
     see "ATS Corporation and Eclipse Automation, unblocked" below.
-  - **Meta** — investigated; scrapable in principle but would require a
-    full Playwright browser session on every scrape run (not lightweight
-    HTTP like every other company here) because its GraphQL API requires
-    per-session anti-automation tokens; not yet built. See "Meta scraping
-    approach" below.
+  - **Meta**, Canada / Software Engineering jobs — built
+    (`scrapers/meta.py`); it runs a full Playwright browser session on
+    every scrape run because its GraphQL API requires per-session
+    anti-automation tokens. See "Meta scraping approach" below.
   - **Amazon**, Canada / Software Development jobs (custom in-house JSON
     API) — https://www.amazon.jobs/en/search.json — see "Amazon scraping
     approach" below.
@@ -364,9 +364,35 @@ not host cron (per the architecture decision above).
     - SmartRecruiters: **Arista Networks**.
     - TalentBrew → Avature: **Intuit**, **Synopsys**.
     - Other: **Xanadu** (HiBob), **Vidyard** (Kula), **FreshBooks** (Gem).
+  - Sixth wave (all Canada-scoped, tech roles; see "Sixth wave scraping
+    approach" below):
+    - Greenhouse: **StackAdapt**, **Anthropic** (also covers Claude),
+      **PlayStation** / Sony Interactive Entertainment, **Hudson River
+      Trading**, **Jane Street**.
+    - Ashby: **OpenAI** (also covers ChatGPT).
+    - SmartRecruiters: **CD PROJEKT RED**.
+    - Workday: **General Motors**, **Accenture**, **BCAA**.
+    - Oracle Recruiting Cloud: **American Express**.
+    - Eightfold (older apply/v2 API): **Netflix**.
+    - SuccessFactors: **EY** (Jobs2Web), **Deloitte** (Canada, newer
+      client-rendered career site).
+    - iCIMS via Jibe: **AMD**.
+    - GC Jobs: **Government of Canada**, **Statistics Canada**, **National
+      Research Council Canada**.
+    - Other: **Government of British Columbia** (hrsmart), **TransLink**
+      (PeopleSoft), **BC Centre for Ability** (ADP Workforce Now), **Uber**
+      (custom, Playwright), **Optiver**, **Two Sigma** (Avature), **KPMG
+      US**, **Dev Information Technology**, **NASA** (USAJOBS), **Y
+      Combinator**.
+    - Covered by an existing scraper, no module of their own: **Slack**
+      (cross-posted to Salesforce's Workday site, so it shows up under
+      Salesforce), **RBC Borealis**, **RBC Capital Markets / Wealth
+      Management / Global Asset Management** (all on jobs.rbc.com), **TD
+      Securities**, **BMO Capital Markets**, **Scotiabank Global Banking and
+      Markets**, **EA SPORTS** (all on their parent's career site).
   - Investigated but **not scraper-ready**: **CGI**, **Ontario Public
-    Service**, **Tesla**, **CN**, **Siemens**. See "Fifth wave scraping
-    approach" below.
+    Service**, **Tesla**, **CN**, **Siemens** (see "Fifth wave scraping
+    approach" below), and **Citadel** (see "Sixth wave scraping approach").
 - More companies and filters will be added later; scraper architecture should
   make adding a new company a matter of adding a new scraper module + a
   `companies` row, not restructuring shared code.
@@ -790,7 +816,9 @@ roles open up.
   combination (Canada-only gives 1 unrelated marketing role — legitimate
   empty result for the SWE slice). Detail endpoint confirmed for real
   `startDate`. `platform` = **`"Workday"`**.
-- **AMD** — **blocked, no workaround found.** `careers.amd.com` points at
+- **AMD** — *(Unblocked 2026-10-02 via careers.amd.com's own Jibe API; see
+  "Sixth wave scraping approach". Original notes follow.)* **Blocked, no
+  workaround found.** `careers.amd.com` points at
   `careers-amd.icims.com` (iCIMS) as its actual system of record (no
   evidence of a secondary underlying ATS to fall back to, unlike Manulife).
   Every direct request to the iCIMS jobs-search endpoint — with or without
@@ -802,7 +830,9 @@ roles open up.
   Playwright pass could confirm whether the WAF challenge is solvable
   non-interactively, but Manulife's experience suggests it may not be worth
   pursuing.
-- **Uber** — **blocked, unresolved.** `careers.uber.com` → a custom in-house
+- **Uber** — *(Unblocked 2026-10-02: careers moved to jobs.uber.com; see
+  "Sixth wave scraping approach". Original notes follow.)* **Blocked,
+  unresolved.** `careers.uber.com` → a custom in-house
   Next.js app, no third-party ATS vendor signature found anywhere in its
   rendered HTML or JS bundles. Its job-search mutation endpoint
   (`POST /api/loadSearchJobsResults`) returns `403 Missing csrf token` — an
@@ -1168,22 +1198,32 @@ scraper. Each helper's docstring explains the API and the per-tenant hooks
   override where offices are misleading (Dropbox, Geotab).
 - `ashby.py` — `api.ashbyhq.com/posting-api/job-board/<org>`.
 - `jobs2web.py` — SuccessFactors Jobs2Web (Scotiabank's layer): `/go/<cat>/<id>/`
-  landing pages, or `/search/` + `startrow` when there are none.
+  landing pages, or `/search/` + `startrow` (plus optional
+  `search_params`, e.g. EY's country facet) when there are none.
 - `phenom.py` — `phApp.ddo` blob, `?category=` per request.
 - `dayforce.py` — Dayforce candidate portal JSON API (see Questrade below).
 - `eightfold.py` — Eightfold `/api/pcsx/search` (Microsoft, Autodesk).
-  Liberty Mutual's older `/api/apply/v2/jobs` API is not covered.
+  Liberty Mutual's and Netflix's older `/api/apply/v2/jobs` API is not
+  covered.
 - `oracle_recruiting.py` — Oracle Recruiting Cloud REST `findReqs` finder
   (Oracle, Metrolinx).
 - `lever.py` — Lever postings API (Spotify).
 - `smartrecruiters.py` — SmartRecruiters posting API (Ubisoft, Arista),
   scoped by a custom field.
 - `talentbrew.py` — Radancy TalentBrew career sites (Intuit, Synopsys).
+- `jibe.py` — iCIMS "Jibe" front-ends' `/api/jobs` (Kinaxis, AMD).
+- `gcjobs.py` — the federal GC Jobs site (Government of Canada,
+  Statistics Canada, NRC), filtered by hiring organization.
 - Still bespoke: the custom in-house sites (Amazon, Google, Apple, IBM,
-  Meta, Shopify), SAP (SuccessFactors feed plus the SmartRecruiters
-  helper), EA and National Bank (Avature, but different page templates and
-  date sources), Liberty Mutual, Kinaxis, Xanadu (HiBob),
-  Vidyard (Kula) and FreshBooks (Gem).
+  Meta, Shopify, Uber, Optiver, KPMG US, Y Combinator, DEV IT), SAP
+  (SuccessFactors feed plus the SmartRecruiters helper), EA, National Bank
+  and Two Sigma (Avature, but different page templates and date sources),
+  Liberty Mutual and Netflix (Eightfold apply/v2), Deloitte (SuccessFactors'
+  newer career site), Xanadu (HiBob), Vidyard (Kula), FreshBooks (Gem),
+  Government of BC (hrsmart), TransLink (PeopleSoft), BC Centre for Ability
+  (ADP) and NASA (USAJOBS).
+- Only Meta and Uber need a browser (Playwright) at scrape time; every
+  other scraper is plain httpx.
 - `base.CANADA_PATTERN` is the shared free-text Canada matcher. It covers
   every province and territory (names, main cities, and whole-word codes),
   so "San Francisco, CA" doesn't match. SK/NL/PE/NB aren't matched as bare
@@ -1360,6 +1400,58 @@ Things worth knowing across the batch:
     free-text `SearchJobs/Canada` keyword search paginates in steps of 6,
     and `jobOffset` repeats pages.
 
+### Sixth wave scraping approach (investigated 2026-10-02)
+
+Each module's docstring has the details (board tokens, facet IDs, counts).
+Things worth knowing across the batch:
+
+- **Unblocked**:
+  - **AMD**: careers.amd.com is an iCIMS Jibe front-end whose own
+    `/api/jobs?location=Canada` is open JSON, so the WAF-protected iCIMS
+    backend is never touched. Kinaxis moved onto the new `jibe.py` helper.
+  - **Uber**: careers moved to `jobs.uber.com` with a plain GET search API
+    (`/api/jobs/search/?page=N&pagesize=100`). Cloudflare blocks httpx
+    (HTTP/1.1 and HTTP/2) by client fingerprint and also blocks headless
+    Chromium's default UA, so `scrapers/uber.py` loads the page in
+    Playwright with a normal Chrome UA and calls the API with `fetch()`.
+- **Products, subsidiaries and divisions**: ChatGPT is OpenAI, Claude is
+  Anthropic, PlayStation is Sony Interactive Entertainment (its own
+  Greenhouse boards, separate from Sony Group's Workday). Slack's jobs are
+  cross-posted to Salesforce's main Workday site, and RBC Borealis's tech
+  jobs are in jobs.rbc.com's "Technology | Analytics | Research" category,
+  so both are covered by existing scrapers.
+- **Title-match scope**: Deloitte (no category data at all), EY (the
+  service-line facet's values are AJAX-only), Netflix (Vancouver animation
+  postings all share one department), PlayStation (departments are cost
+  centres), and the government sites. These are heuristics; EY excludes
+  "Tax" titles because its SR&ED practice posts "Tax Staff - IT".
+- **Government**:
+  - **GC Jobs** (`gcjobs.py`) is the whole federal list (~400 postings),
+    read page by page in one session. NRC, StatCan and the Bank of Canada
+    post there; Government of Canada excludes those three so each
+    posting shows up once.
+  - **BC Public Service**: hrsmart table. Titles start with a
+    classification code, and "IS"/"ISL" are the Information Systems
+    classifications.
+  - **TransLink**: a PeopleSoft Candidate Gateway. More rows load by
+    POSTing the page's hidden `IC*` form fields back with
+    `ICAction=HRS_AGNT_RSLT_I$hdown$0`. PeopleSoft deep links don't work
+    without a session, so jobs link to the search page.
+- **No Canadian office (expected empty)**: Jane Street, Hudson River
+  Trading, Two Sigma, Optiver (the scraper only queries offices from
+  Optiver's own filter list that look Canadian), KPMG US (KPMG Canada is a
+  separate firm), NASA (USAJOBS, US-only), Y Combinator (scraped as an
+  employer, not its Work at a Startup board), DEV IT (Ahmedabad openings
+  only so far).
+- **DEV IT has no job IDs**, so its external_id is the first 16 hex chars
+  of SHA-1(title|location), the first use of the made-up ID scheme.
+- **Not scraper-ready — Citadel**: citadel.com is behind a Cloudflare
+  challenge. Plain HTTP gets 403, and even headless Chromium only gets
+  through on `/careers/open-opportunities/` itself; its category pages,
+  `/page/N/` and query-string filters all stay on "Just a moment...". Only
+  the first 10 postings are reachable, and the office filter lists no
+  Canadian office anyway. Don't retry without new information.
+
 ## Deployment
 
 - GitHub Actions runs on a **self-hosted runner installed on my personal
@@ -1442,10 +1534,9 @@ Things worth knowing across the batch:
 - [x] Set up Cloudflare Access in front of `jobs.ayushtvora.com` — verified
       the hostname now 302-redirects to the Cloudflare Access login page
       instead of serving the app directly.
-- [ ] Decide the exact deterministic external-ID scheme for sites without a
-      stable job ID (e.g. hash of title+location vs. slug from the URL) —
-      not needed for RBC, which exposes a stable `jobId`, but still open for
-      future companies that might not.
+- [x] Decide the exact deterministic external-ID scheme for sites without a
+      stable job ID — the first 16 hex chars of SHA-1 of the lowercased
+      "title|location" (first needed by `scrapers/devit.py`, 2026-10-02).
 - [x] Build the RBC scraper module (`scrapers/rbc.py`) using the approach
       above, wire it into the runner + scheduler, and write the
       `scrape_runs` row per CLAUDE.md's scraper behavior section — verified

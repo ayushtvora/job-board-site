@@ -1,0 +1,32 @@
+-- Reference data for the sixth wave of scrapers (see the fourth wave's
+-- batch 1 migration / Manulife migration for why these rows are needed).
+INSERT INTO "companies" ("slug", "name") VALUES
+    ('stackadapt', 'StackAdapt'),
+    ('anthropic', 'Anthropic'),
+    ('openai', 'OpenAI'),
+    ('playstation', 'PlayStation'),
+    ('cdprojektred', 'CD PROJEKT RED'),
+    ('hrt', 'Hudson River Trading'),
+    ('janestreet', 'Jane Street'),
+    ('optiver', 'Optiver'),
+    ('twosigma', 'Two Sigma'),
+    ('gm', 'General Motors'),
+    ('accenture', 'Accenture'),
+    ('bcaa', 'BCAA'),
+    ('amex', 'American Express'),
+    ('netflix', 'Netflix'),
+    ('ey', 'EY'),
+    ('deloitte', 'Deloitte'),
+    ('kpmgus', 'KPMG US'),
+    ('govcanada', 'Government of Canada'),
+    ('statcan', 'Statistics Canada'),
+    ('nrc', 'National Research Council Canada'),
+    ('govbc', 'Government of British Columbia'),
+    ('translink', 'TransLink'),
+    ('bccfa', 'BC Centre for Ability'),
+    ('devit', 'Dev Information Technology'),
+    ('nasa', 'NASA'),
+    ('ycombinator', 'Y Combinator'),
+    ('uber', 'Uber'),
+    ('amd', 'AMD')
+ON CONFLICT ("slug") DO NOTHING;

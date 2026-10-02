@@ -117,12 +117,40 @@ from . import synopsys
 from . import xanadu
 from . import vidyard
 from . import freshbooks
+from . import stackadapt
+from . import anthropic
+from . import openai
+from . import playstation
+from . import cdprojektred
+from . import hrt
+from . import janestreet
+from . import optiver
+from . import twosigma
+from . import gm
+from . import accenture
+from . import bcaa
+from . import amex
+from . import netflix
+from . import ey
+from . import deloitte
+from . import kpmgus
+from . import govcanada
+from . import statcan
+from . import nrc
+from . import govbc
+from . import translink
+from . import bccfa
+from . import devit
+from . import nasa
+from . import ycombinator
+from . import uber
+from . import amd
 
 # Adding a new company: write scrapers/<slug>.py exposing scrape() -> list[NormalizedJob],
 # add it here, and add a matching row to the companies table. Companies on a
 # common ATS should use the shared helper for it (workday_cxs, greenhouse,
 # ashby, lever, jobs2web, phenom, eightfold, oracle_recruiting, dayforce,
-# smartrecruiters, talentbrew), so
+# smartrecruiters, talentbrew, jibe, gcjobs), so
 # their module is just config + investigation notes.
 SCRAPERS: dict[str, Callable[[], list[NormalizedJob]]] = {
     "rbc": rbc.scrape,
@@ -241,4 +269,32 @@ SCRAPERS: dict[str, Callable[[], list[NormalizedJob]]] = {
     "xanadu": xanadu.scrape,
     "vidyard": vidyard.scrape,
     "freshbooks": freshbooks.scrape,
+    "stackadapt": stackadapt.scrape,
+    "anthropic": anthropic.scrape,
+    "openai": openai.scrape,
+    "playstation": playstation.scrape,
+    "cdprojektred": cdprojektred.scrape,
+    "hrt": hrt.scrape,
+    "janestreet": janestreet.scrape,
+    "optiver": optiver.scrape,
+    "twosigma": twosigma.scrape,
+    "gm": gm.scrape,
+    "accenture": accenture.scrape,
+    "bcaa": bcaa.scrape,
+    "amex": amex.scrape,
+    "netflix": netflix.scrape,
+    "ey": ey.scrape,
+    "deloitte": deloitte.scrape,
+    "kpmgus": kpmgus.scrape,
+    "govcanada": govcanada.scrape,
+    "statcan": statcan.scrape,
+    "nrc": nrc.scrape,
+    "govbc": govbc.scrape,
+    "translink": translink.scrape,
+    "bccfa": bccfa.scrape,
+    "devit": devit.scrape,
+    "nasa": nasa.scrape,
+    "ycombinator": ycombinator.scrape,
+    "uber": uber.scrape,
+    "amd": amd.scrape,
 }

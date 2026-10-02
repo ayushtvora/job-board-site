@@ -67,9 +67,8 @@ Live-reconfirmed details (2026-09-21), refining CLAUDE.md's investigation:
   "Software Engineering, University Grad - Engineering, Tech & Design,
   Research" was seen live), which is more informative than a fixed label.
 
-Note: Playwright is not yet in requirements.txt or the Dockerfile — see the
-scraper hand-off notes for what needs to be added there. This module assumes
-Playwright + Chromium are available in whatever environment runs it.
+Playwright and Chromium are installed by requirements.txt and the
+Dockerfile (scrapers/uber.py is the only other scraper that needs them).
 """
 
 import logging

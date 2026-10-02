@@ -8,7 +8,10 @@ newest-first with `sortColumn=referencedate&sortDirection=desc`.
 
 Sites without category landing pages (e.g. Telus) use the generic
 `/search/?q=` listing instead, paginated by a `startrow` query param
-(same page size) — pass `category_path=None` for that mode.
+(same page size) — pass `category_path=None` for that mode, plus any
+`search_params` the site's own search form sends (e.g. EY's
+`optionsFacetsDD_country=CA`). `base_url` may include a path prefix (EY's
+site lives under `careers.ey.com/ey`); job links are resolved against it.
 
 Per row: title + `/job/<slug>/<numericId>/` link (numeric ID = external_id),
 `.jobLocation` (multi-location rows end in "+N more…" — kept, minus the
@@ -27,6 +30,7 @@ import logging
 import re
 from collections.abc import Callable
 from datetime import datetime
+from urllib.parse import urljoin
 
 import httpx
 from bs4 import BeautifulSoup
@@ -50,8 +54,10 @@ def scrape_jobs2web(
     category_label: str,
     department_filter: Callable[[str], bool] | None = None,
     job_filter: Callable[[NormalizedJob], bool] | None = None,
+    search_params: dict[str, str] | None = None,
 ) -> list[NormalizedJob]:
-    """`category_path` like "/go/All-Jobs/9170201", or None for `/search/`.
+    """`category_path` like "/go/All-Jobs/9170201", or None for `/search/`
+    (with optional extra `search_params`).
     If `department_filter` is given, only rows whose Department column it
     accepts are kept, and the department becomes the job's category.
     `job_filter` can drop parsed jobs client-side (e.g. by location)."""
@@ -65,7 +71,7 @@ def scrape_jobs2web(
             params = {"q": "", "sortColumn": "referencedate", "sortDirection": "desc"}
             if category_path is None:
                 url = f"{base_url}/search/"
-                params |= {"locale": "en_US", "startrow": str(offset)}
+                params |= {"locale": "en_US", "startrow": str(offset), **(search_params or {})}
             else:
                 url = f"{base_url}{category_path}/{offset}/"
             response = client.get(url, params=params)
@@ -116,7 +122,7 @@ def _parse_row(row, base_url: str, category_label: str) -> NormalizedJob | None:
     return {
         "external_id": match.group(1),
         "title": link.get_text(strip=True),
-        "url": href if href.startswith("http") else f"{base_url}{href}",
+        "url": urljoin(f"{base_url}/", href),
         "location": location,
         "category": department_el.get_text(strip=True) if department_el else category_label,
         "posted_date": _parse_date(date_el.get_text(strip=True)) if date_el else None,
