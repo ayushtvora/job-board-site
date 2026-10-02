@@ -17,12 +17,17 @@ once a page adds no new IDs. Response shape is `{"data": {"positions": [...]}}`.
   `creationTs` is the fallback.
 - Postings can list many locations; Canadian ones are shown first, up to
   three, with a count of the rest.
+- Microsoft and Qualcomm sometimes answer the very first request with 429
+  during the 6am run (seen 2026-09-30 and 2026-10-02) while manual runs
+  later in the day succeed, so a 429 is retried after a wait (`Retry-After`
+  if it's given in seconds, else 30s/60s/120s) before giving up.
 
 Liberty Mutual's older Eightfold `/api/apply/v2/jobs` API has different
 field names and isn't covered here (see scrapers/libertymutual.py).
 """
 
 import logging
+import time
 from collections.abc import Callable
 from datetime import datetime, timezone
 
@@ -34,6 +39,8 @@ logger = logging.getLogger(__name__)
 
 MAX_PAGES = 50
 MAX_LOCATIONS_SHOWN = 3
+RATE_LIMIT_BACKOFF_SECONDS = (30, 60, 120)
+MAX_RETRY_AFTER_SECONDS = 300
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
     "Accept": "application/json",
@@ -60,8 +67,7 @@ def scrape_eightfold(
     with httpx.Client(timeout=30, headers=HEADERS) as client:
         for _ in range(MAX_PAGES):
             params = [("domain", domain), ("query", ""), ("location", location), ("start", str(start)), *extra_params]
-            response = client.get(f"{base_url}/api/pcsx/search", params=params)
-            response.raise_for_status()
+            response = _get(client, f"{base_url}/api/pcsx/search", params, name)
             postings = (response.json().get("data") or {}).get("positions") or []
             if not postings:
                 break
@@ -82,6 +88,21 @@ def scrape_eightfold(
 
     logger.info("%s: fetched %d jobs", name, len(jobs))
     return jobs
+
+
+def _get(client: httpx.Client, url: str, params: list[tuple[str, str]], name: str) -> httpx.Response:
+    for backoff in RATE_LIMIT_BACKOFF_SECONDS:
+        response = client.get(url, params=params)
+        if response.status_code != 429:
+            break
+        retry_after = response.headers.get("Retry-After", "")
+        wait = min(int(retry_after), MAX_RETRY_AFTER_SECONDS) if retry_after.isdigit() else backoff
+        logger.warning("%s: rate-limited (429), retrying in %ds", name, wait)
+        time.sleep(wait)
+    else:
+        response = client.get(url, params=params)
+    response.raise_for_status()
+    return response
 
 
 def _normalize(raw: dict, job_id: str, base_url: str, category_label: str | None) -> NormalizedJob:
