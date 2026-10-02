@@ -1186,9 +1186,10 @@ scraper. Each helper's docstring explains the API and the per-tenant hooks
   Vidyard (Kula) and FreshBooks (Gem).
 - `base.CANADA_PATTERN` is the shared free-text Canada matcher. It covers
   every province and territory (names, main cities, and whole-word codes),
-  so "San Francisco, CA" doesn't match. SK/NL/PE aren't matched as bare
-  codes because they collide with ISO country codes (Slovakia, Netherlands,
-  Peru).
+  so "San Francisco, CA" doesn't match. SK/NL/PE/NB aren't matched as bare
+  codes because they collide with other countries' codes (Slovakia,
+  Netherlands, Peru, and the Dutch province Noord-Brabant, e.g. ATS's
+  "Breda, NB, NL").
 - Scope is all of Canada, never a single province. Workday tenants without
   a country facet pass every Canadian `locations` ID (re-checked
   2026-10-02: SOTI, Ontario Teachers', PayPal and Intel each have only

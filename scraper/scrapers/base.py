@@ -6,8 +6,9 @@ from typing import TypedDict
 # whole-word and case-sensitive (the scoped `(?-i:...)`), so they match
 # "Cambridge, ON" but neither "San Francisco, CA" nor the word "on". SK, NL
 # and PE are left out as bare codes because they're also the ISO codes for
-# Slovakia, the Netherlands and Peru; their province names and main cities
-# are matched instead.
+# Slovakia, the Netherlands and Peru, and NB because it's the Dutch province
+# Noord-Brabant ("Breda, NB, NL"); their province names and main cities are
+# matched instead.
 CANADA_PATTERN = re.compile(
     r"canada|"
     # Provinces and territories
@@ -18,8 +19,9 @@ CANADA_PATTERN = re.compile(
     r"toronto|vancouver|montr[eé]al|ottawa|waterloo|kitchener|calgary|edmonton|"
     r"oakville|mississauga|burnaby|markham|brampton|kanata|richmond hill|guelph|"
     r"gatineau|laval|sherbrooke|winnipeg|halifax|saskatoon|regina, sk|fredericton|"
-    r"moncton|st\. john's, nl|charlottetown|whitehorse|yellowknife|iqaluit|kelowna|"
-    r"(?-i:\b(?:ON|BC|QC|AB|NS|MB|NB|YT|NT|NU)\b)",
+    r"moncton|saint john, nb|st\. john's, nl|charlottetown|whitehorse|yellowknife|"
+    r"iqaluit|kelowna|"
+    r"(?-i:\b(?:ON|BC|QC|AB|NS|MB|YT|NT|NU)\b)",
     re.IGNORECASE,
 )
 
