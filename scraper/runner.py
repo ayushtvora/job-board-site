@@ -1,6 +1,10 @@
 import logging
+from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
+import host_limits
 from db import (
     claim_pending_scrape_request,
     finish_scrape_request,
@@ -9,17 +13,44 @@ from db import (
     upsert_jobs_and_cleanup,
 )
 from scrapers import SCRAPERS
+from scrapers.base import NormalizedJob
 
 logger = logging.getLogger(__name__)
+
+# Companies scraped at once. Scraping is almost all waiting on the network,
+# so threads are enough; host_limits keeps companies on a shared ATS host
+# from piling onto it.
+MAX_WORKERS = 16
+
+
+@dataclass
+class ScrapeResult:
+    slug: str
+    started_at: datetime
+    finished_at: datetime
+    jobs: list[NormalizedJob] | None
+    error: str | None
 
 
 def run_all_scrapers() -> None:
     conn = get_connection()
     try:
-        for slug, scrape_fn in SCRAPERS.items():
-            _run_for_company(conn, slug, scrape_fn)
+        # Only the scraping runs in parallel. Results are written here, one
+        # company at a time, so the connection is never shared between
+        # threads.
+        for result in scrape_companies(SCRAPERS):
+            _save_result(conn, result)
     finally:
         conn.close()
+
+
+def scrape_companies(scrapers: dict[str, Callable[[], list[NormalizedJob]]]) -> Iterator[ScrapeResult]:
+    """Run every scraper in a thread pool, yielding each result as it finishes."""
+    host_limits.install()
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS, thread_name_prefix="scrape") as pool:
+        futures = [pool.submit(_scrape_company, slug, scrape_fn) for slug, scrape_fn in scrapers.items()]
+        for future in as_completed(futures):
+            yield future.result()
 
 
 def run_pending_scrape_request() -> None:
@@ -43,9 +74,9 @@ def run_pending_scrape_request() -> None:
     try:
         run_all_scrapers()
     except Exception as exc:
-        # Per-company failures are already caught in _run_for_company; this
-        # only catches something breaking the request itself (e.g. the
-        # initial DB connection).
+        # Per-company failures are already caught in _scrape_company and
+        # _save_result; this only catches something breaking the request
+        # itself (e.g. the initial DB connection).
         logger.exception("On-demand scrape request #%s failed", request_id)
         error_message = str(exc)[:2000]
 
@@ -56,22 +87,30 @@ def run_pending_scrape_request() -> None:
         conn.close()
 
 
-def _run_for_company(conn, slug, scrape_fn) -> None:
+def _scrape_company(slug: str, scrape_fn: Callable[[], list[NormalizedJob]]) -> ScrapeResult:
     started_at = datetime.now(timezone.utc)
-    status = "success"
+    jobs = None
     error_message = None
-
     try:
         jobs = scrape_fn()
-        with conn.transaction():
-            upsert_jobs_and_cleanup(conn, slug, jobs)
     except Exception as exc:
         # One company's failure must not stop the others — log it, record it
         # in scrape_runs (so the web UI's error banner can surface it), and
         # move on to the next company.
         logger.exception("%s: scrape failed", slug)
-        status = "error"
         error_message = str(exc)[:2000]
+    return ScrapeResult(slug, started_at, datetime.now(timezone.utc), jobs, error_message)
 
-    finished_at = datetime.now(timezone.utc)
-    record_scrape_run(conn, slug, started_at, finished_at, status, error_message)
+
+def _save_result(conn, result: ScrapeResult) -> None:
+    error_message = result.error
+    if error_message is None:
+        try:
+            with conn.transaction():
+                upsert_jobs_and_cleanup(conn, result.slug, result.jobs)
+        except Exception as exc:
+            logger.exception("%s: saving jobs failed", result.slug)
+            error_message = str(exc)[:2000]
+
+    status = "error" if error_message else "success"
+    record_scrape_run(conn, result.slug, result.started_at, result.finished_at, status, error_message)

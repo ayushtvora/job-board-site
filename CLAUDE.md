@@ -1223,7 +1223,14 @@ scraper. Each helper's docstring explains the API and the per-tenant hooks
   Government of BC (hrsmart), TransLink (PeopleSoft), BC Centre for Ability
   (ADP) and NASA (USAJOBS).
 - Only Meta and Uber need a browser (Playwright) at scrape time; every
-  other scraper is plain httpx.
+  other scraper is plain httpx. Both hold `base.BROWSER_LOCK`, so only
+  one Chromium runs at a time.
+- **Companies are scraped in parallel** (added 2026-10-02): `runner.py`
+  runs 16 at a time in a thread pool, and writes each result to Postgres on
+  the main thread, so a scraper must not keep mutable module-level state.
+  `host_limits.py` caps in-flight requests at 4 per host and 8 across all
+  `*.myworkdayjobs.com` tenants, so shared ATS hosts don't see a higher
+  request rate. A full run went from ~690s to ~63s.
 - `base.CANADA_PATTERN` is the shared free-text Canada matcher. It covers
   every province and territory (names, main cities, and whole-word codes),
   so "San Francisco, CA" doesn't match. SK/NL/PE/NB aren't matched as bare

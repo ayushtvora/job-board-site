@@ -30,6 +30,7 @@ BeautifulSoup, no session needed (just a browser User-Agent).
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 import httpx
@@ -44,11 +45,13 @@ AREA_FIELD = "6472[]"
 AREA_IDS = ["25044", "25045", "25047", "25059"]
 PAGE_SIZE = 20
 MAX_PAGES = 30
+# Detail pages fetched at once (one per posting, for its date and category).
+DETAIL_WORKERS = 4
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"}
 
 
 def scrape() -> list[NormalizedJob]:
-    jobs: list[NormalizedJob] = []
+    listings: list[tuple[str, str, str, str]] = []
     seen_ids: set[str] = set()
 
     with httpx.Client(timeout=30, headers=HEADERS, follow_redirects=True) as client:
@@ -72,16 +75,21 @@ def scrape() -> list[NormalizedJob]:
                 seen_ids.add(job_id)
                 cells = row.find_all("td")
                 location = cells[0].get_text(" ", strip=True) if cells else ""
-                jobs.append(_normalize(client, job_id, link.get_text(strip=True), url, location))
+                listings.append((job_id, link.get_text(strip=True), url, location))
         else:
-            logger.warning("National Bank scrape hit MAX_PAGES=%d without finishing — got %d jobs", MAX_PAGES, len(jobs))
+            logger.warning("National Bank scrape hit MAX_PAGES=%d without finishing — got %d jobs", MAX_PAGES, len(listings))
+
+    # map() re-raises the first failed detail fetch, so a failure still fails
+    # the whole scrape rather than returning a partial job list.
+    with ThreadPoolExecutor(max_workers=DETAIL_WORKERS) as pool:
+        jobs = list(pool.map(lambda listing: _normalize(*listing), listings))
 
     logger.info("National Bank: fetched %d jobs", len(jobs))
     return jobs
 
 
-def _normalize(client: httpx.Client, job_id: str, title: str, url: str, location: str) -> NormalizedJob:
-    fields = _detail_fields(client, url)
+def _normalize(job_id: str, title: str, url: str, location: str) -> NormalizedJob:
+    fields = _detail_fields(url)
     return {
         "external_id": job_id,
         "title": title,
@@ -93,11 +101,16 @@ def _normalize(client: httpx.Client, job_id: str, title: str, url: str, location
     }
 
 
-def _detail_fields(client: httpx.Client, url: str) -> dict[str, str]:
+def _detail_fields(url: str) -> dict[str, str]:
     """Label -> value for the detail page's fields. Avature renders them two
     ways: a label div + value div ("Posting date"), or a single value div
-    starting with a bold "Label:" ("Area(s) of interest: ...")."""
-    response = client.get(url)
+    starting with a bold "Label:" ("Area(s) of interest: ...").
+
+    Each fetch uses a fresh client, i.e. its own session: the site answers
+    one request per session cookie at a time (confirmed 2026-10-02: 4
+    parallel detail fetches took ~6s on one session, ~2.4s on four)."""
+    with httpx.Client(timeout=30, headers=HEADERS, follow_redirects=True) as client:
+        response = client.get(url)
     response.raise_for_status()
     soup = BeautifulSoup(response.text, "html.parser")
     fields: dict[str, str] = {}

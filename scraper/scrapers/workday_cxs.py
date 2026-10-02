@@ -4,6 +4,7 @@ Same approach as SOTI (scrapers/soti.py — see its docstring for how the
 CXS API was found): POST the list endpoint with `appliedFacets`, paginate by
 `limit`/`offset`, then GET each job's detail endpoint for the real
 `startDate`, canonical `externalUrl`, and a real place name for `location`.
+Each page's detail requests run a few at a time.
 
 Per-tenant differences this absorbs, so each company module stays a small
 config + its own investigation notes:
@@ -25,6 +26,7 @@ config + its own investigation notes:
 
 import logging
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
@@ -33,6 +35,8 @@ from .base import CANADA_PATTERN, NormalizedJob
 logger = logging.getLogger(__name__)
 
 PAGE_SIZE = 20
+# Detail pages fetched at once per tenant (one extra request per posting).
+DETAIL_WORKERS = 4
 
 
 def scrape_workday(
@@ -59,7 +63,13 @@ def scrape_workday(
     offset = 0
     total: int | None = None
 
-    with httpx.Client(timeout=30) as client:
+    with httpx.Client(timeout=30) as client, ThreadPoolExecutor(max_workers=DETAIL_WORKERS) as detail_pool:
+
+        def fetch_detail(raw: dict) -> dict:
+            detail_response = client.get(detail_url.format(path=raw["externalPath"]))
+            detail_response.raise_for_status()
+            return detail_response.json()["jobPostingInfo"]
+
         for _ in range(max_pages):
             response = client.post(
                 list_url,
@@ -73,6 +83,7 @@ def scrape_workday(
             if not postings:
                 break
 
+            new_postings = []
             for raw in postings:
                 path = raw.get("externalPath")
                 if path is None:
@@ -81,9 +92,12 @@ def scrape_workday(
                 if path in seen_paths:
                     continue
                 seen_paths.add(path)
-                detail_response = client.get(detail_url.format(path=path))
-                detail_response.raise_for_status()
-                detail = detail_response.json()["jobPostingInfo"]
+                new_postings.append(raw)
+
+            # map() re-raises the first failed fetch, so a failure still fails
+            # the whole scrape rather than returning a partial job list.
+            details = list(detail_pool.map(fetch_detail, new_postings))
+            for raw, detail in zip(new_postings, details):
                 if job_filter is not None and not job_filter(raw, detail):
                     continue
                 category = (category_fn(raw, detail) if category_fn else None) or category_label

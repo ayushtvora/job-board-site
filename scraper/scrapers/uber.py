@@ -29,7 +29,7 @@ import logging
 
 from playwright.sync_api import sync_playwright
 
-from .base import NormalizedJob
+from .base import BROWSER_LOCK, NormalizedJob
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ FETCH_JS = """async (query) => {
 
 def scrape() -> list[NormalizedJob]:
     postings: list[dict] = []
-    with sync_playwright() as pw:
+    with BROWSER_LOCK, sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
         try:
             page = browser.new_page(user_agent=USER_AGENT)

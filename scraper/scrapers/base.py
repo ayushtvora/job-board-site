@@ -1,4 +1,5 @@
 import re
+import threading
 from typing import TypedDict
 
 # Matches a Canadian place in a free-text location string, covering every
@@ -34,3 +35,9 @@ class NormalizedJob(TypedDict):
     category: str
     posted_date: str | None  # "YYYY-MM-DD", or None if the source doesn't expose one
     platform: str
+
+
+# Held by the scrapers that drive a Playwright browser (Meta, Uber) for the
+# whole browser session. The runner scrapes companies in parallel, and one
+# headless Chromium at a time is plenty for the server.
+BROWSER_LOCK = threading.Lock()
