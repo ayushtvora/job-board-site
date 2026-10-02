@@ -1,179 +1,121 @@
 """SAP careers scraper (Canada / Software-Design and Development jobs).
 
-Runs on SAP's self-hosted **SAP SuccessFactors** career site (jobs.sap.com) —
-same ATS family as scrapers/scotiabank.py, but an older/different layer:
-classic server-rendered SuccessFactors search (`/search/`) rather than
-Scotiabank's simpler static category landing page. See CLAUDE.md's "SAP
-scraping approach" section for how this was found.
+**Re-investigated 2026-10-02**: jobs.sap.com was rebuilt as a Next.js app
+(Vercel, behind Cloudflare). The old Jobs2Web `/search/` page this scraper
+used to parse now 301s to `/en/jobs/` (and 403s plain httpx), so SAP's jobs
+now come from two separate backends:
 
-- **Requires a normal browser User-Agent header** — a bare request with no UA
-  gets blocked; a Chrome-like UA string is sufficient (confirmed live, no
-  further challenge/cookie dance needed — a basic UA check, not a WAF).
-- List URL: `GET /search/?q=&locationsearch=Canada` — confirmed filters to
-  Canada jobs only (page title becomes "Canada - SAP Jobs").
-- **No working category/department facet via plain HTTP** — the dropdown in
-  the HTML is populated client-side; can't filter server-side by category.
-  Every Canada job is fetched and then filtered client-side (see below).
-- Pagination: `startrow=N` query param, page size 25.
-- List view only has title, job detail URL (which embeds a stable numeric
-  requisition ID as its trailing path segment, e.g. `1426752233`), and a
-  free-text location string. No category, no posted date at the list level.
-- **Category ("Work Area") and posted date are only on the detail page**
-  (`https://jobs.sap.com/job/<slug>/<id>/`) — one extra GET per job per run,
-  same two-tier pattern as scrapers/soti.py. Confirmed selectors:
-  `span[data-careersite-propertyid="department"]` for Work Area (e.g.
-  "Software-Development Operations"; the requested category label
-  "Software-Design and Development" is also a real observed value on this
-  site) and `span[data-careersite-propertyid="date"]` for Posted Date (a
-  plain "Mon D, YYYY" string, same format as Scotiabank's `.jobDate`).
-- Since there's no server-side category filter, jobs are filtered
-  client-side to Work Area containing "software-design and development"
-  (case-insensitive) after fetching each detail page.
-- `platform` = `"SuccessFactors"`.
+- **SAP SuccessFactors classic RCM XML feed**, which holds SAP's main job set
+  (769 postings worldwide, 10 in Canada on 2026-10-02; new postings still
+  appearing daily):
+  `GET https://career5.successfactors.eu/career?company=SAP&career_ns=job_listing_summary&resultType=XML`.
+  This is the same feed as Canada Life's and ATS Corporation's, but SAP's
+  includes the custom fields: each `<Job>` has `ReqId`, `JobTitle`,
+  `Posted-Date` (MM/DD/YYYY) and `<filterN><label>/<value>` pairs, among them
+  "Work Area" (e.g. "Software-Design and Development"), "Country" and
+  "Internal Posting Location" (city). It's one ~11 MB response, with no
+  pagination or server-side filtering. It isn't reliably well-formed XML
+  (see scrapers/canadalife.py), so it's parsed with regexes per `<Job>`.
+  These jobs aren't on the new jobs.sap.com (`/en/jobs/<ReqId>/` 404s), but
+  the classic job page
+  `career5.successfactors.eu/career?company=SAP&career_ns=job_listing&career_job_req_id=<ReqId>`
+  renders the posting with a working Apply button, so that's the URL used.
+- **SmartRecruiters**, company `SAPITBusinessSysteme`. That's what the new
+  jobs.sap.com actually lists (51 postings worldwide, all under the "SAP IT
+  Business Systeme" entity; each job page's `applicationUrl` points at
+  `jobs.smartrecruiters.com/SAPITBusinessSysteme/...`). This set doesn't
+  overlap with the SuccessFactors feed. It's scoped by the "Board Area"
+  custom field, where "Product & Engineering" is the closest match to
+  "Software-Design and Development". There were 0 matching Canada postings
+  on 2026-10-02. It's scraped too in case SAP moves more postings over.
+
+`platform` is `"SuccessFactors"` or `"SmartRecruiters"` per source.
 """
 
+import html
 import logging
 import re
 from datetime import datetime
 
 import httpx
-from bs4 import BeautifulSoup
 
 from .base import NormalizedJob
+from .smartrecruiters import scrape_smartrecruiters
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://jobs.sap.com"
-SEARCH_PATH = "/search/"
-CATEGORY_LABEL_FILTER = "software-design and development"
+FEED_URL = "https://career5.successfactors.eu/career"
+FEED_PARAMS = {"company": "SAP", "career_ns": "job_listing_summary", "resultType": "XML"}
+JOB_URL = "https://career5.successfactors.eu/career?company=SAP&career_ns=job_listing&career_job_req_id={}"
+WORK_AREAS = {"Software-Design and Development"}
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
-}
+SMARTRECRUITERS_COMPANY = "SAPITBusinessSysteme"
+SMARTRECRUITERS_BOARD_AREAS = {"Product & Engineering"}
 
-PAGE_SIZE = 25
-MAX_PAGES = 20  # safety cap; this Canada-wide search currently has ~17 jobs
-
-JOB_ID_RE = re.compile(r"/(\d+)/?$")
-TOTAL_RE = re.compile(r"of\s+(\d+)", re.IGNORECASE)
+JOB_RE = re.compile(r"<Job>(.*?)</Job>", re.DOTALL)
+FILTER_RE = re.compile(r"<label>(.*?)</label>\s*<value>(.*?)</value>", re.DOTALL)
+CDATA_RE = re.compile(r"<!\[CDATA\[(.*?)\]\]>", re.DOTALL)
 
 
 def scrape() -> list[NormalizedJob]:
-    jobs: list[NormalizedJob] = []
-    seen_ids: set[str] = set()
-    startrow = 0
-    total: int | None = None
-
-    with httpx.Client(timeout=30, headers=HEADERS) as client:
-        for _ in range(MAX_PAGES):
-            response = client.get(
-                f"{BASE_URL}{SEARCH_PATH}",
-                params={"q": "", "locationsearch": "Canada", "startrow": startrow},
-            )
-            response.raise_for_status()
-
-            if total is None:
-                total = _parse_total(response.text)
-
-            page_jobs = _parse_listing(response.text)
-            if not page_jobs:
-                break
-
-            for job in page_jobs:
-                if job["external_id"] in seen_ids:
-                    continue
-                seen_ids.add(job["external_id"])
-                jobs.append(job)
-
-            startrow += PAGE_SIZE
-            if total is not None and startrow >= total:
-                break
-        else:
-            logger.warning("SAP scrape hit MAX_PAGES=%d without finishing — got %d jobs", MAX_PAGES, len(jobs))
-
-    logger.info("SAP: fetched %d Canada jobs (site reported total=%s)", len(jobs), total)
-
-    filtered: list[NormalizedJob] = []
-    with httpx.Client(timeout=30, headers=HEADERS) as client:
-        for job in jobs:
-            detail = _fetch_detail(client, job["url"])
-            if detail is None:
-                continue
-            work_area, posted_date = detail
-            if CATEGORY_LABEL_FILTER not in work_area.lower():
-                continue
-            job["category"] = work_area
-            job["posted_date"] = posted_date
-            filtered.append(job)
-
-    logger.info(
-        "SAP: %d of %d Canada jobs matched Work Area containing %r",
-        len(filtered),
-        len(jobs),
-        CATEGORY_LABEL_FILTER,
+    jobs = _scrape_successfactors()
+    jobs += scrape_smartrecruiters(
+        name="SAP",
+        company=SMARTRECRUITERS_COMPANY,
+        field_label="Board Area",
+        field_values=SMARTRECRUITERS_BOARD_AREAS,
     )
-    return filtered
+    return jobs
 
 
-def _parse_total(html: str) -> int | None:
-    soup = BeautifulSoup(html, "html.parser")
-    label = soup.select_one(".paginationLabel")
-    if label is None:
-        return None
-    match = TOTAL_RE.search(label.get_text())
-    return int(match.group(1)) if match else None
+def _scrape_successfactors() -> list[NormalizedJob]:
+    with httpx.Client(timeout=60) as client:
+        response = client.get(FEED_URL, params=FEED_PARAMS)
+        response.raise_for_status()
 
+    postings = JOB_RE.findall(response.text)
+    if not postings:
+        # The feed answers 200 with an HTML page for an unknown company, so an
+        # empty parse means the feed moved, not that SAP has no jobs.
+        raise RuntimeError("SAP SuccessFactors feed returned no <Job> elements")
 
-def _parse_listing(html: str) -> list[NormalizedJob]:
-    soup = BeautifulSoup(html, "html.parser")
     jobs: list[NormalizedJob] = []
-
-    for row in soup.select("tr.data-row"):
-        link = row.select_one("td.colTitle a.jobTitle-link")
-        location_el = row.select_one("td.colLocation .jobLocation")
-        if link is None:
+    for posting in postings:
+        fields = {label.strip(): html.unescape(value.strip()) for label, value in FILTER_RE.findall(posting)}
+        if fields.get("Work Area") not in WORK_AREAS:
+            continue
+        if fields.get("Country") != "Canada" and "Canada" not in fields.get("Additional Locations", ""):
             continue
 
-        href = link["href"]
-        match = JOB_ID_RE.search(href)
-        if not match:
-            continue
-
+        req_id = _tag(posting, "ReqId")
+        city = fields.get("Internal Posting Location", "")
         jobs.append(
             {
-                "external_id": match.group(1),
-                "title": link.get_text(strip=True),
-                "url": f"{BASE_URL}{href}",
-                "location": location_el.get_text(strip=True) if location_el else "",
-                "category": "",  # filled in from the detail page below
-                "posted_date": None,  # filled in from the detail page below
+                "external_id": req_id,
+                "title": _tag(posting, "JobTitle"),
+                "url": JOB_URL.format(req_id),
+                "location": f"{city}, Canada" if city else "Canada",
+                "category": fields["Work Area"],
+                "posted_date": _parse_date(_tag(posting, "Posted-Date")),
                 "platform": "SuccessFactors",
             }
         )
 
+    logger.info("SAP: %d of %d SuccessFactors postings matched Canada + %s", len(jobs), len(postings), WORK_AREAS)
     return jobs
 
 
-def _fetch_detail(client: httpx.Client, url: str) -> tuple[str, str | None] | None:
-    response = client.get(url)
-    if response.status_code != 200:
-        logger.warning("SAP: detail fetch failed for %s (status %d)", url, response.status_code)
-        return None
-
-    soup = BeautifulSoup(response.text, "html.parser")
-    work_area_el = soup.select_one('span[data-careersite-propertyid="department"]')
-    date_el = soup.select_one('span[data-careersite-propertyid="date"]')
-
-    work_area = work_area_el.get_text(strip=True) if work_area_el else ""
-    posted_date = _parse_date(date_el.get_text(strip=True)) if date_el else None
-    return work_area, posted_date
+def _tag(posting: str, name: str) -> str:
+    match = re.search(rf"<{name}>(.*?)</{name}>", posting, re.DOTALL)
+    if match is None:
+        return ""
+    value = match.group(1)
+    cdata = CDATA_RE.search(value)
+    return html.unescape(cdata.group(1) if cdata else value).strip()
 
 
 def _parse_date(text: str) -> str | None:
     try:
-        return datetime.strptime(text, "%b %d, %Y").date().isoformat()
+        return datetime.strptime(text, "%m/%d/%Y").date().isoformat()
     except ValueError:
         return None

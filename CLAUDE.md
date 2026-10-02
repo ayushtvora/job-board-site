@@ -280,8 +280,8 @@ not host cron (per the architecture decision above).
     — https://boards-api.greenhouse.io/v1/boards/stripe — see "Airbnb,
     Databricks, Stripe scraping approach" below.
   - **SAP**, Canada / Software-Design and Development jobs (SAP
-    SuccessFactors) — https://jobs.sap.com — see "SAP scraping approach"
-    below.
+    SuccessFactors XML feed + SmartRecruiters; jobs.sap.com was rebuilt
+    2026-10-02) — see "SAP scraping approach" below.
   - **Snowflake**, Canada / Engineering jobs (Phenom front-end, Ashby is the
     real ATS) — https://careers.snowflake.com/us/en/search-results?category=Engineering
     — see "Snowflake scraping approach" below.
@@ -858,33 +858,35 @@ scraping the custom front-end HTML:
   exists here. Confirmed 29 Canada matches with this approach.
 - `platform` = **`"Greenhouse"`** for all three.
 
-### SAP scraping approach (investigated 2026-09-19)
+### SAP scraping approach (re-investigated 2026-10-02)
 
-- Real URL: `https://jobs.sap.com`. Confirmed **SAP SuccessFactors**
-  (self-hosted) via CSP headers referencing `*.successfactors.com`/
-  `*.sapsf.com`/`*.sapsf.eu`, Jobs2Web asset paths (same product family as
-  Scotiabank's setup), and an SSO redirect to `career5.successfactors.eu`.
-- Unlike Scotiabank, `/search/` is a JS SPA layer over the classic Jobs2Web
-  engine, but classic server-rendered results are still directly reachable:
-  `GET https://jobs.sap.com/search/?q=&locationsearch=Canada` — **requires a
-  normal browser User-Agent header** (plain curl with no UA got blocked; a
-  Chrome UA worked) — this is a basic UA check, not a hard WAF block like
-  Manulife's. Confirmed `locationsearch=Canada` really filters (title became
-  "Canada - SAP Jobs"; 19 unique Canada jobs).
-- Pagination: `startrow=N`, page size 25 (confirmed `startrow=25` correctly
-  empties out once the 19 Canada results are exhausted).
-- **Category/department facet dropdowns exist in the HTML but their option
-  values are populated by client-side JS/AJAX not visible to plain HTTP** —
-  could not enumerate real category facet values or param names without a
-  Playwright network trace, same as EA's original investigation.
-- List view has title, job URL (with a stable numeric requisition ID, e.g.
-  `1426752233`, use as `external_id`), and one free-text location string.
-  **Category and posted date are only on the detail page**
-  (`https://jobs.sap.com/job/<slug>/<id>/`) — free-text **"Work Area"**
-  field (e.g. `"Software-Design and Development"`, confirmed on real Canada
-  jobs) and a real absolute **"Posted Date"** — one extra request per job,
-  same pattern as SOTI/Manulife.
-- `platform` = **`"SuccessFactors"`**.
+The original 2026-09-19 approach (parsing the Jobs2Web `/search/` page on
+jobs.sap.com) stopped working when SAP rebuilt jobs.sap.com as a Next.js
+app (Vercel, behind Cloudflare). `/search/` now 301s to `/en/jobs/`, and
+plain httpx gets a 403. SAP's jobs are now split across two backends with
+no overlap, and `scrapers/sap.py` reads both:
+
+- **SuccessFactors classic RCM XML feed** (SAP's main job set, 769 postings
+  worldwide, 10 in Canada):
+  `career5.successfactors.eu/career?company=SAP&career_ns=job_listing_summary&resultType=XML`.
+  This is the same feed as Canada Life's and ATS's, but SAP's includes the
+  custom fields "Work Area", "Country" and "Internal Posting Location", plus
+  `ReqId` and `Posted-Date`. That's everything the scraper needs in one
+  ~11 MB response, so no detail pages are fetched. These jobs aren't on the
+  new jobs.sap.com, so the job link is the classic RCM page
+  (`...&career_ns=job_listing&career_job_req_id=<ReqId>`), which has a
+  working Apply button. **`external_id` is now the ReqId**, not the old
+  Jobs2Web numeric ID.
+- **SmartRecruiters**, company `SAPITBusinessSysteme`: what the new
+  jobs.sap.com actually lists (51 postings, all under the "SAP IT Business
+  Systeme" entity). It's scoped by the "Board Area" custom field = "Product
+  & Engineering". There were 0 Canada matches on 2026-10-02, but it's
+  scraped in case SAP moves more postings over.
+- Scope stays Work Area = "Software-Design and Development" (2 Canada jobs
+  on 2026-10-02). Other tech-ish Work Areas in the feed, if the scope ever
+  widens: "Information Technology", "Software-Development Operations",
+  "Software-Research", "Software-User Experience", "Software-Quality
+  Assurance".
 
 ### Snowflake scraping approach (investigated 2026-09-19)
 
@@ -1178,8 +1180,9 @@ scraper. Each helper's docstring explains the API and the per-tenant hooks
   scoped by a custom field.
 - `talentbrew.py` — Radancy TalentBrew career sites (Intuit, Synopsys).
 - Still bespoke: the custom in-house sites (Amazon, Google, Apple, IBM,
-  Meta, Shopify, SAP), EA and National Bank (Avature, but different page
-  templates and date sources), Liberty Mutual, Kinaxis, Xanadu (HiBob),
+  Meta, Shopify), SAP (SuccessFactors feed plus the SmartRecruiters
+  helper), EA and National Bank (Avature, but different page templates and
+  date sources), Liberty Mutual, Kinaxis, Xanadu (HiBob),
   Vidyard (Kula) and FreshBooks (Gem).
 - `base.CANADA_PATTERN` is the shared free-text Canada matcher. It uses
   whole-word province codes, so "San Francisco, CA" doesn't match.
