@@ -22,14 +22,45 @@ services:
     depends_on:
       - db
 
+  # AirVPN WireGuard tunnel for the scraper. Its firewall drops all traffic
+  # while the tunnel is down, so scrapes fail instead of falling back to the
+  # home IP. Needs its own AirVPN device key: the arr-stack's gluetun already
+  # uses the other one, and one key can't hold two tunnels at once.
+  vpn:
+    image: qmcgaw/gluetun:v3.41.3
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      VPN_SERVICE_PROVIDER: airvpn
+      VPN_TYPE: wireguard
+      WIREGUARD_PRIVATE_KEY: ${AIRVPN_WG_PRIVATE_KEY}
+      WIREGUARD_PRESHARED_KEY: ${AIRVPN_WG_PRESHARED_KEY}
+      WIREGUARD_ADDRESSES: ${AIRVPN_WG_ADDRESSES}
+      SERVER_COUNTRIES: Canada
+      # Lets the scraper reach db outside the tunnel.
+      FIREWALL_OUTBOUND_SUBNETS: 172.16.0.0/12
+      TZ: ${TZ}
+    # gluetun's own DNS server can't resolve compose service names, so "db"
+    # points at the Docker host, where db's published port 5432 is open.
+    extra_hosts:
+      - "db:host-gateway"
+
   scraper:
     build: ./scraper
     restart: unless-stopped
+    # All scraper traffic (httpx and Playwright) goes through the vpn service.
+    network_mode: "service:vpn"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       TZ: ${TZ}
     depends_on:
-      - db
+      vpn:
+        condition: service_healthy
+      db:
+        condition: service_started
 
 volumes:
   postgres_data:

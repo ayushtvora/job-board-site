@@ -1477,6 +1477,22 @@ Things worth knowing across the batch:
   Postgres data.
 - Env vars (DB credentials, connection strings) via `.env` on the server, not
   committed to the repo.
+- **Scraper traffic goes through AirVPN** (added 2026-11-02). The `vpn`
+  service is a gluetun WireGuard tunnel to a Canadian AirVPN server, and
+  `scraper` uses `network_mode: "service:vpn"`, so all of its outbound
+  traffic (httpx and Playwright) leaves through it. web, db and the
+  server's other containers use the normal connection. gluetun's firewall
+  is a kill switch: if the tunnel drops, scrapes error out (and show up in
+  the error banner) rather than leaking the home IP. AirVPN isn't
+  installed on the host itself; the `arr-stack` project on the server has
+  its own separate gluetun, and this project uses its own AirVPN device
+  key because one key can't run two tunnels at once. gluetun's built-in
+  DNS server doesn't resolve compose service names, so the `vpn` service
+  maps `db` to `host-gateway` in its hosts file and the scraper reaches
+  Postgres through db's published host port 5432 (keep that port
+  published). VPN exit IPs get
+  bot-blocked more often than a home IP, so if a scraper starts failing
+  only behind the VPN, that's the first thing to suspect.
 - Access control: **Cloudflare Access** sits in front of the deployed `web`
   service (via a Cloudflare Tunnel or equivalent), restricting access to my
   own identity. The Next.js app itself implements no auth — it trusts that
@@ -1509,6 +1525,7 @@ Things worth knowing across the batch:
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | db | Initializes the Postgres container; `DATABASE_URL` is built from these. |
 | `TZ` | scraper | Explicit timezone (e.g. `America/Toronto`) so the 6am schedule means local time, not UTC. |
 | `NODE_ENV` | web | `development` locally, `production` on the server. |
+| `AIRVPN_WG_PRIVATE_KEY` / `AIRVPN_WG_PRESHARED_KEY` / `AIRVPN_WG_ADDRESSES` | vpn | WireGuard `PrivateKey`, `PresharedKey` and `Address` (IPv4 only) from an AirVPN Config Generator file for this project's own AirVPN device. |
 
 - Local values go in a gitignored `.env.local` (or `.env` used only by
   `docker compose` locally); production values live in `.env` on the
