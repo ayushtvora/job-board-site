@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import FilterSelect from "./FilterSelect";
 import styles from "./page.module.css";
 
 type Job = {
@@ -216,38 +217,30 @@ export default function Home() {
         </div>
 
         <div className={styles.filters}>
-          <label className={styles.filter}>
-            Posted
-            <select value={postedWithin} onChange={(e) => setPostedWithin(e.target.value)}>
-              {POSTED_WITHIN_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.filter}>
-            Sector
-            <select value={sector} onChange={(e) => changeSector(e.target.value)}>
-              <option value="">All sectors</option>
-              {sectors.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.filter}>
-            Company
-            <select value={company} onChange={(e) => setCompany(e.target.value)}>
-              <option value="">All companies</option>
-              {companyOptions.map((c) => (
-                <option key={c.slug} value={c.slug}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <FilterSelect
+            label="Posted"
+            value={postedWithin}
+            options={POSTED_WITHIN_OPTIONS}
+            onChange={setPostedWithin}
+          />
+          <FilterSelect
+            label="Sector"
+            value={sector}
+            options={[
+              { value: "", label: "All sectors" },
+              ...sectors.map((s) => ({ value: s, label: s })),
+            ]}
+            onChange={changeSector}
+          />
+          <FilterSelect
+            label="Company"
+            value={company}
+            options={[
+              { value: "", label: "All companies" },
+              ...companyOptions.map((c) => ({ value: c.slug, label: c.name })),
+            ]}
+            onChange={setCompany}
+          />
           <label className={styles.showHidden}>
             <input
               type="checkbox"
