@@ -74,8 +74,7 @@ def scrape_jobs2web(
                 params |= {"locale": "en_US", "startrow": str(offset), **(search_params or {})}
             else:
                 url = f"{base_url}{category_path}/{offset}/"
-            response = client.get(url, params=params)
-            response.raise_for_status()
+            response = _get(client, name, url, params)
             if total is None:
                 match = RESULTS_COUNT_RE.search(response.text)
                 total = int(match.group(1)) if match else 0
@@ -105,6 +104,23 @@ def scrape_jobs2web(
 
     logger.info("%s: fetched %d jobs (site reported total=%s)", name, len(jobs), total)
     return jobs
+
+
+def _get(client: httpx.Client, name: str, url: str, params: dict) -> httpx.Response:
+    """GET a page, retrying once if the server dropped the connection.
+
+    EY failed twice on 2026-11-02 with "Server disconnected without sending
+    a response", both times during a full parallel run (101s instead of the
+    usual ~15s), while it worked every time on its own. httpx discards the
+    dropped connection, so the retry opens a fresh one.
+    """
+    try:
+        response = client.get(url, params=params)
+    except httpx.RemoteProtocolError:
+        logger.warning("%s: server dropped the connection, retrying", name)
+        response = client.get(url, params=params)
+    response.raise_for_status()
+    return response
 
 
 def _parse_row(row, base_url: str, category_label: str) -> NormalizedJob | None:

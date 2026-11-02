@@ -1136,14 +1136,15 @@ where noted for Meta.
 - **Shopify** — real ATS is **Ashby** (jobs link as
   `shopify.com/careers?ashby_jid=<uuid>`), but there's no public Ashby board
   (posting API 404s for every plausible slug; Greenhouse/Lever 404 too).
-  The careers page is a React Router app, and its loader data is available
-  on its own at `GET https://www.shopify.com/careers.data`. It's in React
-  Router's "turbo-stream" encoding (a flat, index-referenced JSON array),
-  which `scrapers/shopify.py` decodes. Jobs are at
-  `["($locale)/careers"].data.jobPostingsWithJobs[].jobPosting` (`id`
-  UUID = external_id, `title`, `teamName`, `publishedDate` real ISO date,
-  `locationIds`), with location UUIDs resolved through the sibling
-  `atsLocations` list. **Canada caveat**: all 44 Engineering postings are
+  The careers site is a React Router app, and each page's loader data is
+  available on its own at `<page>.data`, in React Router's "turbo-stream"
+  encoding (a flat, index-referenced JSON array), which
+  `scrapers/shopify.py` decodes. **Re-done 2026-11-02**: the job list moved
+  from `/careers.data` to `/careers/jobs.data` (`roles[]`: `id` UUID =
+  external_id, `disciplineSlug`, `href`, no date), so the scraper fetches
+  each "engineering-data" role's `<href>.data` for its `jobPosting`
+  (`teamName`, `publishedDate`, `locationIds`) and `locations`. The UUIDs
+  didn't change, so existing rows still match. **Canada caveat**: all 44 Engineering postings are
   listed only under the remote region "Americas", with no Canadian city, so
   the scraper matches "Americas" as well as any Canadian location. This is
   the same limitation as Canonical. `platform` = **`"Ashby"`**.

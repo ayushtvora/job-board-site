@@ -3,23 +3,26 @@
 Shopify's real ATS is **Ashby** (every job links as
 `shopify.com/careers?ashby_jid=<uuid>`), but there's no public Ashby job
 board for it — Ashby's posting API 404s for every plausible org slug, and
-Greenhouse/Lever 404 too. Instead, the careers page itself
-(`shopify.com/careers`) is a React Router app whose loader data already
-contains Shopify's full Ashby job export, and React Router serves that
-loader data on its own at `shopify.com/careers.data` — no browser needed.
+Greenhouse/Lever 404 too. Instead, the careers site is a React Router app,
+and React Router serves each page's loader data on its own at
+`<page>.data` — no browser needed.
 
 - `careers.data` is React Router's "turbo-stream" encoding, not plain JSON:
   one JSON array where objects are `{"_<keyIndex>": <valueIndex>}` and
   arrays are lists of value indices, all pointing back into that same flat
   array (for deduplication). `_decode_turbo_stream` below flattens it back
   into normal JSON. Negative indices are sentinels (undefined/null/etc).
-- Jobs are at `["($locale)/careers"]["data"]["jobPostingsWithJobs"]`, each
-  `{"jobPosting": {...}, "job": {...}}`. `jobPosting` has `id` (stable UUID,
-  used as `external_id`), `title`, `teamName` (e.g. "Engineering"),
-  `publishedDate` (plain ISO date), `externalLink`, and `locationIds`
-  (primary + secondary Ashby location UUIDs).
-- Location UUIDs resolve via the sibling `atsLocations` list, each with a
-  `name` and (usually) `address.postalAddress.addressCountry`.
+- The job list is `/careers/jobs.data`, at
+  `["($locale)/careers/jobs"]["data"]["roles"]`: `id` (the Ashby posting
+  UUID, used as `external_id`), `title`, `disciplineSlug` and `href`, but
+  no posted date. (Until 2026-10 `/careers.data` itself carried the full
+  Ashby export as `jobPostingsWithJobs` + `atsLocations`; both are gone.)
+- So each "engineering-data" role's own page, `<href>.data`, is fetched
+  for its `jobPosting` (`teamName` e.g. "Engineering", `publishedDate`
+  plain ISO date, `externalLink`, `locationIds`) and its `locations`
+  (each with a `name` and, usually, `address.postalAddress.addressCountry`).
+  The "Engineering & Data" discipline also has data roles, so scope is
+  still `teamName == "Engineering"`.
 - **Canada caveat**: Shopify is remote-first. As of 2026-09-25 all 44
   Engineering postings are listed only under the region "Americas" (country
   field literally "Americas"), not a Canadian city — same shape of problem
@@ -37,8 +40,10 @@ from .base import NormalizedJob
 
 logger = logging.getLogger(__name__)
 
-DATA_URL = "https://www.shopify.com/careers.data"
-ROUTE_KEY = "($locale)/careers"
+BASE_URL = "https://www.shopify.com"
+LIST_ROUTE_KEY = "($locale)/careers/jobs"
+DETAIL_ROUTE_KEY = "($locale)/careers/$posting"
+DISCIPLINE_SLUG = "engineering-data"
 TEAM_NAME = "Engineering"
 MATCHING_COUNTRIES = {"canada", "americas"}
 
@@ -48,21 +53,30 @@ _TURBO_SENTINELS = {-1: None, -2: None, -3: None, -4: None, -5: None, -6: None, 
 
 def scrape() -> list[NormalizedJob]:
     with httpx.Client(timeout=30, headers={"User-Agent": "Mozilla/5.0"}) as client:
-        response = client.get(DATA_URL)
-        response.raise_for_status()
-        first_line = response.text.split("\n", 1)[0]
+        roles = _load(client, "/careers/jobs", LIST_ROUTE_KEY)["roles"]
+        candidates = [role for role in roles if role.get("disciplineSlug") == DISCIPLINE_SLUG]
 
-    data = _decode_turbo_stream(first_line)[ROUTE_KEY]["data"]
-    locations = {loc["id"]: loc for loc in data["atsLocations"]}
-    postings = [entry["jobPosting"] for entry in data["jobPostingsWithJobs"]]
+        jobs = []
+        for role in candidates:
+            detail = _load(client, role["href"], DETAIL_ROUTE_KEY)
+            posting = detail["jobPosting"]
+            locations = {loc["id"]: loc for loc in detail.get("locations") or []}
+            if posting.get("teamName") == TEAM_NAME and _matches_location(posting, locations):
+                jobs.append(_normalize(posting, locations))
 
-    jobs = [
-        _normalize(posting, locations)
-        for posting in postings
-        if posting.get("teamName") == TEAM_NAME and _matches_location(posting, locations)
-    ]
-    logger.info("Shopify: fetched %d matching jobs (of %d total postings)", len(jobs), len(postings))
+    logger.info(
+        "Shopify: fetched %d matching jobs (of %d %s roles, %d total)",
+        len(jobs), len(candidates), DISCIPLINE_SLUG, len(roles),
+    )
     return jobs
+
+
+def _load(client: httpx.Client, path: str, route_key: str) -> dict:
+    """Fetch a page's React Router loader data."""
+    response = client.get(f"{BASE_URL}{path}.data")
+    response.raise_for_status()
+    first_line = response.text.split("\n", 1)[0]
+    return _decode_turbo_stream(first_line)[route_key]["data"]
 
 
 def _decode_turbo_stream(line: str) -> dict:
