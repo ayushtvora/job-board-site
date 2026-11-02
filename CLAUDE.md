@@ -33,6 +33,12 @@ per-company/isolated, so it doesn't need to share code with the web app.
 companies
   slug          text PK          -- e.g. "rbc"
   name          text             -- e.g. "RBC"
+  sectors       text[] default {Other} -- company groups for the UI's
+                                  -- Sector filter, e.g. {Big Tech, AI};
+                                  -- main group first, a second only
+                                  -- when a good share of its roles fit
+                                  -- it. Set in the migration that adds
+                                  -- the company
 
 jobs
   id            serial PK
@@ -136,6 +142,15 @@ conditions from the filter but still respects `will_apply = true`. Jobs with
 scope for now (a separate "show everything" view can cover those later if
 needed).
 
+Filter bar (alongside "Show hidden jobs"; all combine with AND):
+- **Posted**: any time / past 24 hours / past week / past month, on the
+  *effective* posted date (same fallback as the column), compared by
+  calendar date since `posted_date` has no time. So "past 24 hours" means
+  dated today or yesterday.
+- **Sector**: any of `companies.sectors`. Picking one narrows the Company dropdown
+  to that sector's companies.
+- **Company**: a single company.
+
 Scrape error banner: the UI checks scrape status (see `GET /api/scrape-status`
 below) and shows a dismissible popup/banner if any company's most recent
 scrape run has `status = "error"`, naming the company so a broken scraper for
@@ -152,9 +167,12 @@ Both routes live in the Next.js app (`web`), backed by Prisma.
 - `showHidden=true` drops the `is_active`/`applied` conditions from the
   filter (still respecting `will_apply = true`), per the "Show hidden jobs"
   toggle above.
+- Filter bar params: `postedWithin=<days>` (effective posted date within
+  the last N calendar days), `sector=<one of companies.sectors>`, and
+  `company=<companies.slug>`.
 - Optional query params (future-friendly, not required for v1):
-  `company`, `is_active`, `applied`, `will_apply` to override the default
-  filter further, e.g. for a later "show everything" view.
+  `is_active`, `applied`, `will_apply` to override the default filter
+  further, e.g. for a later "show everything" view.
 - Response: JSON array of jobs, each shaped like:
   ```json
   {
@@ -180,6 +198,10 @@ Both routes live in the Next.js app (`web`), backed by Prisma.
 - When `applied` transitions to `true`, the server sets `applied_at = now()`;
   when it transitions back to `false`, `applied_at` is cleared to `null`.
 - Returns the updated job row (same shape as above). 404 if `id` doesn't exist.
+
+**`GET /api/companies`**
+- Returns every company as `{ "slug", "name", "sectors" }`, sorted by name,
+  for the Company and Sector dropdowns.
 
 **`GET /api/scrape-status`**
 - Returns the most recent `scrape_runs` row per company, so the UI can show
@@ -395,7 +417,8 @@ not host cron (per the architecture decision above).
     approach" below), and **Citadel** (see "Sixth wave scraping approach").
 - More companies and filters will be added later; scraper architecture should
   make adding a new company a matter of adding a new scraper module + a
-  `companies` row, not restructuring shared code.
+  `companies` row (with its `sectors`, or it shows up under "Other"), not
+  restructuring shared code.
 
 ### RBC scraping approach (investigated 2026-09-17)
 

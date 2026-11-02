@@ -21,6 +21,23 @@ export async function GET(request: NextRequest) {
   const company = params.get("company");
   if (company) where.companyId = company;
 
+  const sector = params.get("sector");
+  if (sector) where.company = { sectors: { has: sector } };
+
+  // postedWithin=N keeps jobs whose *effective* posted date (see
+  // effectivePostedDate) is within the last N days, compared by calendar
+  // date (UTC, same as the displayed date) since posted_date has no time.
+  const postedWithin = Number(params.get("postedWithin"));
+  if (Number.isInteger(postedWithin) && postedWithin > 0) {
+    const cutoff = new Date();
+    cutoff.setUTCHours(0, 0, 0, 0);
+    cutoff.setUTCDate(cutoff.getUTCDate() - postedWithin);
+    where.OR = [
+      { postedDate: { gte: cutoff } },
+      { postedDate: null, firstSeenAt: { gte: cutoff } },
+    ];
+  }
+
   const isActiveOverride = parseBoolParam(params.get("is_active"));
   if (isActiveOverride !== undefined) where.isActive = isActiveOverride;
 

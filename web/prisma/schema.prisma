@@ -11,8 +11,9 @@ datasource db {
 }
 
 model Company {
-  slug String @id
-  name String
+  slug    String   @id
+  name    String
+  sectors String[] @default(["Other"])
 
   jobs       Job[]
   scrapeRuns ScrapeRun[]

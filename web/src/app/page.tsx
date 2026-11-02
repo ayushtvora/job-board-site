@@ -30,12 +30,30 @@ type ScrapeRequest = {
   finishedAt: string | null;
 };
 
+type Company = {
+  slug: string;
+  name: string;
+  sectors: string[];
+};
+
 const SCAN_POLL_INTERVAL_MS = 3000;
+
+// Values are days, sent as the API's postedWithin param; "" means any date.
+const POSTED_WITHIN_OPTIONS = [
+  { value: "", label: "Any time" },
+  { value: "1", label: "Past 24 hours" },
+  { value: "7", label: "Past week" },
+  { value: "30", label: "Past month" },
+];
 
 export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [showHidden, setShowHidden] = useState(false);
+  const [postedWithin, setPostedWithin] = useState("");
+  const [sector, setSector] = useState("");
+  const [company, setCompany] = useState("");
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
   const [scrapeStatuses, setScrapeStatuses] = useState<ScrapeStatus[]>([]);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -44,11 +62,17 @@ export default function Home() {
 
   const loadJobs = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/jobs${showHidden ? "?showHidden=true" : ""}`);
+    const params = new URLSearchParams();
+    if (showHidden) params.set("showHidden", "true");
+    if (postedWithin) params.set("postedWithin", postedWithin);
+    if (sector) params.set("sector", sector);
+    if (company) params.set("company", company);
+    const query = params.toString();
+    const res = await fetch(`/api/jobs${query ? `?${query}` : ""}`);
     const data: Job[] = await res.json();
     setJobs(data);
     setLoading(false);
-  }, [showHidden]);
+  }, [showHidden, postedWithin, sector, company]);
 
   const loadScrapeStatus = useCallback(async () => {
     const res = await fetch("/api/scrape-status");
@@ -63,6 +87,12 @@ export default function Home() {
   useEffect(() => {
     loadScrapeStatus();
   }, [loadScrapeStatus]);
+
+  useEffect(() => {
+    fetch("/api/companies")
+      .then((res) => res.json())
+      .then((data: Company[]) => setCompanies(data));
+  }, []);
 
   // Pick up an already in-flight scan on page load, so refreshing the page
   // mid-scan still shows "Scanning…" instead of losing track of it.
@@ -92,6 +122,19 @@ export default function Home() {
   }, [scanInFlight, loadJobs, loadScrapeStatus]);
 
   const scrapeErrors = scrapeStatuses.filter((run) => run.status === "error");
+
+  const sectors = [...new Set(companies.flatMap((c) => c.sectors))].sort();
+  // Picking a sector narrows the Company dropdown to that sector's companies.
+  const companyOptions = sector ? companies.filter((c) => c.sectors.includes(sector)) : companies;
+
+  function changeSector(next: string) {
+    setSector(next);
+    // Drop a selected company that isn't in the new sector, rather than
+    // leaving a hidden filter that makes the table silently empty.
+    if (next && company && !companies.find((c) => c.slug === company)?.sectors.includes(next)) {
+      setCompany("");
+    }
+  }
 
   // The most recent finishedAt across all companies' last scrape_runs row —
   // reflects the last time any scan completed, whether kicked off by the
@@ -172,14 +215,48 @@ export default function Home() {
           )}
         </div>
 
-        <label className={styles.showHidden}>
-          <input
-            type="checkbox"
-            checked={showHidden}
-            onChange={(e) => setShowHidden(e.target.checked)}
-          />
-          Show hidden jobs (expired or applied)
-        </label>
+        <div className={styles.filters}>
+          <label className={styles.filter}>
+            Posted
+            <select value={postedWithin} onChange={(e) => setPostedWithin(e.target.value)}>
+              {POSTED_WITHIN_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.filter}>
+            Sector
+            <select value={sector} onChange={(e) => changeSector(e.target.value)}>
+              <option value="">All sectors</option>
+              {sectors.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.filter}>
+            Company
+            <select value={company} onChange={(e) => setCompany(e.target.value)}>
+              <option value="">All companies</option>
+              {companyOptions.map((c) => (
+                <option key={c.slug} value={c.slug}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.showHidden}>
+            <input
+              type="checkbox"
+              checked={showHidden}
+              onChange={(e) => setShowHidden(e.target.checked)}
+            />
+            Show hidden jobs (expired or applied)
+          </label>
+        </div>
 
         {loading ? (
           <p>Loading…</p>

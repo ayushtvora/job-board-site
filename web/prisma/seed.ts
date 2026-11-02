@@ -9,7 +9,10 @@ async function main() {
   const rbc = await prisma.company.upsert({
     where: { slug: "rbc" },
     update: {},
-    create: { slug: "rbc", name: "RBC" },
+    // RBC is the one company no migration inserts (it predates the
+    // per-company migrations), so the sector migration can't tag it on a
+    // fresh database.
+    create: { slug: "rbc", name: "RBC", sectors: ["Banking"] },
   });
 
   const shopify = await prisma.company.upsert({
