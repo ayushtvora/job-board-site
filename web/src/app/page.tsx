@@ -44,6 +44,7 @@ const SCAN_POLL_INTERVAL_MS = 3000;
 // A posting can list many cities (Deloitte's go up to 20); the rest are
 // collapsed into "+N more", with the full list on hover.
 const MAX_CITIES_SHOWN = 3;
+const PAGE_SIZE = 50;
 
 // Values are days, sent as the API's postedWithin param; "" means any date.
 const POSTED_WITHIN_OPTIONS = [
@@ -75,6 +76,7 @@ export default function Home() {
   const [scrapeStatuses, setScrapeStatuses] = useState<ScrapeStatus[]>([]);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [scanRequest, setScanRequest] = useState<ScrapeRequest | null>(null);
+  const [page, setPage] = useState(0);
   const scanInFlight = scanRequest?.status === "pending" || scanRequest?.status === "running";
 
   const loadJobs = useCallback(async () => {
@@ -149,8 +151,23 @@ export default function Home() {
   // Picking a sector narrows the Company dropdown to that sector's companies.
   const companyOptions = sector ? companies.filter((c) => c.sectors.includes(sector)) : companies;
 
+  // Re-fetching after a checkbox edit can shrink the list, so the page is
+  // clamped rather than trusted.
+  const pageCount = Math.max(1, Math.ceil(jobs.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageJobs = jobs.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
+  // Wraps a filter's setter so changing the filter goes back to page 1.
+  function resettingPage<T>(set: (value: T) => void) {
+    return (value: T) => {
+      set(value);
+      setPage(0);
+    };
+  }
+
   function changeSector(next: string) {
     setSector(next);
+    setPage(0);
     // Drop a selected company that isn't in the new sector, rather than
     // leaving a hidden filter that makes the table silently empty.
     if (next && company && !companies.find((c) => c.slug === company)?.sectors.includes(next)) {
@@ -238,12 +255,12 @@ export default function Home() {
         </div>
 
         <div className={styles.filters}>
-          <FilterSelect label="Field" value={field} options={FIELD_OPTIONS} onChange={setField} />
+          <FilterSelect label="Field" value={field} options={FIELD_OPTIONS} onChange={resettingPage(setField)} />
           <FilterSelect
             label="Posted"
             value={postedWithin}
             options={POSTED_WITHIN_OPTIONS}
-            onChange={setPostedWithin}
+            onChange={resettingPage(setPostedWithin)}
           />
           <FilterSelect
             label="Sector"
@@ -253,6 +270,7 @@ export default function Home() {
               ...sectors.map((s) => ({ value: s, label: s })),
             ]}
             onChange={changeSector}
+            searchable
           />
           <FilterSelect
             label="Company"
@@ -261,7 +279,8 @@ export default function Home() {
               { value: "", label: "All companies" },
               ...companyOptions.map((c) => ({ value: c.slug, label: c.name })),
             ]}
-            onChange={setCompany}
+            onChange={resettingPage(setCompany)}
+            searchable
           />
           <FilterSelect
             label="City"
@@ -270,13 +289,14 @@ export default function Home() {
               { value: "", label: "All cities" },
               ...cities.map((c) => ({ value: c, label: c })),
             ]}
-            onChange={setCity}
+            onChange={resettingPage(setCity)}
+            searchable
           />
           <label className={styles.showHidden}>
             <input
               type="checkbox"
               checked={showHidden}
-              onChange={(e) => setShowHidden(e.target.checked)}
+              onChange={(e) => resettingPage(setShowHidden)(e.target.checked)}
             />
             Show hidden jobs (expired or applied)
           </label>
@@ -287,57 +307,68 @@ export default function Home() {
         ) : jobs.length === 0 ? (
           <p>No jobs to show.</p>
         ) : (
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Company</th>
-                <th>Job Title</th>
-                <th>Location</th>
-                <th>Job ID</th>
-                <th>Link</th>
-                <th>Posted Date</th>
-                <th>Applied</th>
-                <th>Will Apply</th>
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((job) => (
-                <tr key={job.id}>
-                  <td>{job.company}</td>
-                  <td>{job.title}</td>
-                  <td>{renderLocation(job)}</td>
-                  <td>{job.externalId}</td>
-                  <td>
-                    <a
-                      href={job.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={styles.link}
-                    >
-                      {job.platform}
-                    </a>
-                  </td>
-                  <td>{job.postedDate}</td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={job.applied}
-                      disabled={savingIds.has(job.id)}
-                      onChange={(e) => updateJob(job.id, { applied: e.target.checked })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={job.willApply}
-                      disabled={savingIds.has(job.id)}
-                      onChange={(e) => updateJob(job.id, { willApply: e.target.checked })}
-                    />
-                  </td>
+          <>
+            {renderPager(jobs.length, currentPage, pageCount, setPage)}
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Job Title</th>
+                  <th>Location</th>
+                  <th>Job ID</th>
+                  <th>Link</th>
+                  <th>Posted Date</th>
+                  <th>Applied</th>
+                  <th>Will Apply</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {pageJobs.map((job) => (
+                  <tr key={job.id}>
+                    <td className={styles.company}>{job.company}</td>
+                    <td>
+                      <span className={styles.clamp} title={job.title}>
+                        {job.title}
+                      </span>
+                    </td>
+                    <td className={styles.location}>{renderLocation(job)}</td>
+                    <td className={styles.jobId}>{job.externalId}</td>
+                    <td className={styles.nowrap}>
+                      <a
+                        href={job.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.link}
+                      >
+                        {job.platform}
+                      </a>
+                    </td>
+                    <td className={styles.nowrap}>{job.postedDate}</td>
+                    <td className={styles.checkbox}>
+                      <input
+                        type="checkbox"
+                        checked={job.applied}
+                        disabled={savingIds.has(job.id)}
+                        onChange={(e) => updateJob(job.id, { applied: e.target.checked })}
+                      />
+                    </td>
+                    <td className={styles.checkbox}>
+                      <input
+                        type="checkbox"
+                        checked={job.willApply}
+                        disabled={savingIds.has(job.id)}
+                        onChange={(e) => updateJob(job.id, { willApply: e.target.checked })}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {renderPager(jobs.length, currentPage, pageCount, (next) => {
+              setPage(next);
+              window.scrollTo({ top: 0 });
+            })}
+          </>
         )}
       </main>
     </div>
@@ -348,14 +379,52 @@ export default function Home() {
 // of it (e.g. just "Canada"). Hovering shows the source site's own text.
 function renderLocation(job: Job) {
   if (job.cities.length === 0) {
-    return <span className={styles.rawLocation}>{job.location}</span>;
+    return (
+      <span className={`${styles.clamp} ${styles.rawLocation}`} title={job.location}>
+        {job.location}
+      </span>
+    );
   }
   const shown = job.cities.slice(0, MAX_CITIES_SHOWN).join(", ");
   const hidden = job.cities.length - MAX_CITIES_SHOWN;
   return (
-    <span title={job.location}>
+    <span className={styles.clamp} title={job.location}>
       {shown}
       {hidden > 0 && <span className={styles.moreCities}> +{hidden} more</span>}
     </span>
+  );
+}
+
+function renderPager(
+  total: number,
+  currentPage: number,
+  pageCount: number,
+  goTo: (page: number) => void,
+) {
+  const first = currentPage * PAGE_SIZE + 1;
+  const last = Math.min(total, (currentPage + 1) * PAGE_SIZE);
+  return (
+    <div className={styles.pager}>
+      <span className={styles.pagerCount}>
+        Showing {first}–{last} of {total} jobs
+      </span>
+      {pageCount > 1 && (
+        <div className={styles.pagerButtons}>
+          <button type="button" disabled={currentPage === 0} onClick={() => goTo(currentPage - 1)}>
+            Prev
+          </button>
+          <span>
+            Page {currentPage + 1} of {pageCount}
+          </span>
+          <button
+            type="button"
+            disabled={currentPage === pageCount - 1}
+            onClick={() => goTo(currentPage + 1)}
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

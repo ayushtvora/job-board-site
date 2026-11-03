@@ -125,6 +125,9 @@ The main table, in column order:
   raw `location` on hover), or the raw `location` when it names no city
   (e.g. just "Canada").
 - **Job ID** is `jobs.external_id`.
+- The table shows 50 jobs per page (paged client-side, with the total
+  count above it); changing a filter goes back to page 1. Long titles and
+  locations are clamped to two lines, with the full text on hover.
 - **Link** renders as a hyperlink to `jobs.url`, with link text set to
   `jobs.platform` (e.g. "Workday") instead of the raw URL.
 - **Applied** and **Will Apply** render as checkboxes, editable inline; each

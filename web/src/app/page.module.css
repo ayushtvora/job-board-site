@@ -19,7 +19,7 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 1100px;
+  max-width: 1400px;
   gap: 16px;
   padding: 48px 24px;
 }
@@ -102,15 +102,90 @@
 .table th,
 .table td {
   text-align: left;
-  padding: 8px 12px;
+  vertical-align: top;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--border);
+  font-size: 0.9em;
+  line-height: 1.35;
 }
 
 .table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--background);
   font-weight: 600;
-  font-size: 0.9em;
+  font-size: 0.8em;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+/* Long titles and locations stop at two lines; the full text is in the
+   title attribute. */
+.clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.company {
+  min-width: 100px;
+  max-width: 160px;
+}
+
+.location {
+  min-width: 140px;
+  max-width: 240px;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.table .jobId {
+  white-space: nowrap;
+  color: var(--muted-text);
+  font-size: 0.8em;
+}
+
+.table .checkbox {
+  text-align: center;
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  font-size: 0.85em;
+}
+
+.pagerCount {
+  color: var(--muted-text);
+}
+
+.pagerButtons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pagerButtons button {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.pagerButtons button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .table tbody tr:hover {

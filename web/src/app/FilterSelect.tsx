@@ -5,23 +5,34 @@ import styles from "./FilterSelect.module.css";
 
 type Option = { value: string; label: string };
 
+// Case- and accent-insensitive, so "montreal" finds "Montréal".
+function normalize(text: string) {
+  return text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+}
+
 // A dropdown drawn in the page instead of a native <select>: browsers draw a
 // native select's open list themselves, outside the page, so it can't use
 // the page's web font (Firefox has no way to opt out of that).
+// `searchable` adds a search box above the options, for the long lists.
 export default function FilterSelect({
   label,
   value,
   options,
   onChange,
+  searchable = false,
 }: {
   label: string;
   value: string;
   options: Option[];
   onChange: (value: string) => void;
+  searchable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  // An index into `shown`, not `options`.
   const [activeIndex, setActiveIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const labelId = useId();
   const listId = useId();
@@ -30,6 +41,9 @@ export default function FilterSelect({
     0,
     options.findIndex((option) => option.value === value),
   );
+  const shown = query
+    ? options.filter((option) => normalize(option.label).includes(normalize(query)))
+    : options;
 
   useEffect(() => {
     if (!open) return;
@@ -46,14 +60,27 @@ export default function FilterSelect({
     listRef.current?.children[activeIndex]?.scrollIntoView({ block: "nearest" });
   }, [open, activeIndex]);
 
-  function openList() {
-    setActiveIndex(selectedIndex);
+  function openList(initialQuery = "") {
+    setQuery(initialQuery);
+    setActiveIndex(initialQuery ? 0 : selectedIndex);
     setOpen(true);
   }
 
-  function choose(index: number) {
-    onChange(options[index].value);
+  function close() {
     setOpen(false);
+    // The search box had focus, so hand it back to the button.
+    if (searchable) buttonRef.current?.focus();
+  }
+
+  function choose(index: number) {
+    if (!shown[index]) return;
+    onChange(shown[index].value);
+    close();
+  }
+
+  function changeQuery(next: string) {
+    setQuery(next);
+    setActiveIndex(0);
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -61,23 +88,32 @@ export default function FilterSelect({
       if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) {
         e.preventDefault();
         openList();
+      } else if (searchable && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // Typing on the closed dropdown starts a search with that letter.
+        e.preventDefault();
+        openList(e.key);
       }
       return;
     }
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, options.length - 1));
+      setActiveIndex((i) => Math.min(i + 1, shown.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" || (!searchable && e.key === " ")) {
+      e.preventDefault();
+      choose(activeIndex);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    } else if (e.key === "Tab") {
+      setOpen(false);
+    } else if (searchable) {
+      // Every other key edits the search box, Home/End included.
     } else if (e.key === "Home" || e.key === "End") {
       e.preventDefault();
       setActiveIndex(e.key === "Home" ? 0 : options.length - 1);
-    } else if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      choose(activeIndex);
-    } else if (e.key === "Escape" || e.key === "Tab") {
-      setOpen(false);
     } else if (e.key.length === 1) {
       // Typing a letter jumps to the next option starting with it, like a
       // native select.
@@ -98,6 +134,7 @@ export default function FilterSelect({
       <span id={labelId}>{label}</span>
       <div className={styles.control}>
         <button
+          ref={buttonRef}
           type="button"
           className={styles.button}
           role="combobox"
@@ -105,7 +142,7 @@ export default function FilterSelect({
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={listId}
-          aria-activedescendant={open ? `${listId}-${activeIndex}` : undefined}
+          aria-activedescendant={open && !searchable ? `${listId}-${activeIndex}` : undefined}
           onClick={() => (open ? setOpen(false) : openList())}
           onKeyDown={onKeyDown}
         >
@@ -113,23 +150,40 @@ export default function FilterSelect({
           <span className={styles.chevron} aria-hidden="true">▾</span>
         </button>
         {open && (
-          <ul className={styles.list} id={listId} role="listbox" aria-labelledby={labelId} ref={listRef}>
-            {options.map((option, i) => (
-              <li
-                key={option.value}
-                id={`${listId}-${i}`}
-                role="option"
-                aria-selected={i === selectedIndex}
-                className={`${styles.option} ${i === activeIndex ? styles.active : ""} ${
-                  i === selectedIndex ? styles.selected : ""
-                }`}
-                onPointerEnter={() => setActiveIndex(i)}
-                onClick={() => choose(i)}
-              >
-                {option.label}
-              </li>
-            ))}
-          </ul>
+          <div className={styles.popup}>
+            {searchable && (
+              <input
+                type="text"
+                className={styles.search}
+                placeholder="Search…"
+                aria-label={`Search ${label}`}
+                aria-controls={listId}
+                aria-activedescendant={shown.length > 0 ? `${listId}-${activeIndex}` : undefined}
+                autoFocus
+                value={query}
+                onChange={(e) => changeQuery(e.target.value)}
+                onKeyDown={onKeyDown}
+              />
+            )}
+            <ul className={styles.list} id={listId} role="listbox" aria-labelledby={labelId} ref={listRef}>
+              {shown.map((option, i) => (
+                <li
+                  key={option.value}
+                  id={`${listId}-${i}`}
+                  role="option"
+                  aria-selected={option.value === value}
+                  className={`${styles.option} ${i === activeIndex ? styles.active : ""} ${
+                    option.value === value ? styles.selected : ""
+                  }`}
+                  onPointerEnter={() => setActiveIndex(i)}
+                  onClick={() => choose(i)}
+                >
+                  {option.label}
+                </li>
+              ))}
+              {shown.length === 0 && <li className={styles.noMatches}>No matches</li>}
+            </ul>
+          </div>
         )}
       </div>
     </div>
