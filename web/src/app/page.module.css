@@ -126,6 +126,11 @@
   color: var(--link-visited);
 }
 
+.rawLocation,
+.moreCities {
+  color: var(--muted-text);
+}
+
 @media (prefers-color-scheme: dark) {
   .page {
     --border: #2a2a2a;

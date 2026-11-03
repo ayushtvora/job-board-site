@@ -61,7 +61,7 @@ def _normalize(post: dict) -> NormalizedJob:
         "external_id": post["id"],
         "title": post["title"].strip(),
         "url": post["absolute_url"],
-        "location": "; ".join(canadian[:3]) + (f" (+{len(canadian) - 3} more)" if len(canadian) > 3 else ""),
+        "location": "; ".join(canadian),
         "category": _departments(post),
         "posted_date": published[:10] if published else None,
         "platform": "Gem",

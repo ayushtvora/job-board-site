@@ -24,6 +24,9 @@ export async function GET(request: NextRequest) {
   const field = params.get("field");
   if (field) where.field = field;
 
+  const city = params.get("city");
+  if (city) where.cities = { has: city };
+
   const sector = params.get("sector");
   if (sector) where.company = { sectors: { has: sector } };
 

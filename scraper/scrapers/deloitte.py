@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://careers.deloitte.ca"
 MAX_PAGES = 80
-MAX_LOCATIONS_SHOWN = 3
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36"}
 TITLE_PATTERN = re.compile(
     r"technolog|software|developer|engineer|data|cloud|cyber|\bAI\b|artificial intelligence|machine learning|"
@@ -89,9 +88,7 @@ def scrape() -> list[NormalizedJob]:
 
 def _normalize(raw: dict) -> NormalizedJob:
     cities = raw.get("mfield1") or []
-    location = "; ".join(cities[:MAX_LOCATIONS_SHOWN])
-    if len(cities) > MAX_LOCATIONS_SHOWN:
-        location += f" (+{len(cities) - MAX_LOCATIONS_SHOWN} more)"
+    location = "; ".join(cities)
     return {
         "external_id": raw["id"],
         "title": raw["unifiedStandardTitle"].strip(),

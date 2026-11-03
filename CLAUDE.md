@@ -65,6 +65,10 @@ jobs
   field         text default 'Software' -- "Software" or "Data", set by the
                                   -- scraper from the title (see "Data
                                   -- roles" below); the UI's Field filter
+  cities        text[] default {} -- Canadian cities in `location`, plus
+                                  -- "Remote", set by the scraper
+                                  -- (base.job_cities); the UI's Location
+                                  -- column and City filter
 
   unique (company_id, external_id)
 
@@ -114,9 +118,12 @@ Scraper behavior:
 
 The main table, in column order:
 
-| Company | Job Title | Job ID | Link | Posted Date | Applied | Will Apply |
-|---|---|---|---|---|---|---|
+| Company | Job Title | Location | Job ID | Link | Posted Date | Applied | Will Apply |
+|---|---|---|---|---|---|---|---|
 
+- **Location** shows `jobs.cities` (the first 3, then "+N more", with the
+  raw `location` on hover), or the raw `location` when it names no city
+  (e.g. just "Canada").
 - **Job ID** is `jobs.external_id`.
 - **Link** renders as a hyperlink to `jobs.url`, with link text set to
   `jobs.platform` (e.g. "Workday") instead of the raw URL.
@@ -158,6 +165,8 @@ Filter bar (alongside "Show hidden jobs"; all combine with AND):
 - **Sector**: any of `companies.sectors`. Picking one narrows the Company dropdown
   to that sector's companies.
 - **Company**: a single company.
+- **City**: one of `jobs.cities`; a job listing several cities matches
+  any of them.
 
 Scrape error banner: the UI checks scrape status (see `GET /api/scrape-status`
 below) and shows a dismissible popup/banner if any company's most recent
@@ -177,7 +186,8 @@ Both routes live in the Next.js app (`web`), backed by Prisma.
   toggle above.
 - Filter bar params: `field=Software|Data`, `postedWithin=<days>`
   (effective posted date within the last N calendar days),
-  `sector=<one of companies.sectors>`, and `company=<companies.slug>`.
+  `sector=<one of companies.sectors>`, `company=<companies.slug>`, and
+  `city=<one of jobs.cities>`.
 - Optional query params (future-friendly, not required for v1):
   `is_active`, `applied`, `will_apply` to override the default filter
   further, e.g. for a later "show everything" view.
@@ -188,6 +198,8 @@ Both routes live in the Next.js app (`web`), backed by Prisma.
     "company": "RBC",
     "title": "Software Developer",
     "externalId": "R-00012345",
+    "location": "TORONTO, Ontario, Canada; MONTRÉAL, Quebec, Canada",
+    "cities": ["Toronto", "Montreal"],
     "url": "https://jobs.rbc.com/...",
     "platform": "Workday",
     "field": "Software",
@@ -211,6 +223,10 @@ Both routes live in the Next.js app (`web`), backed by Prisma.
 **`GET /api/companies`**
 - Returns every company as `{ "slug", "name", "sectors" }`, sorted by name,
   for the Company and Sector dropdowns.
+
+**`GET /api/cities`**
+- Returns every city in any job's `cities`, sorted, with "Remote" last, for
+  the City dropdown.
 
 **`GET /api/scrape-status`**
 - Returns the most recent `scrape_runs` row per company, so the UI can show
@@ -1311,6 +1327,27 @@ department they're filed under, and each job gets a `field` of "Data" or
   bypassed for data titles, but a Canada filter still applies.
 - Scotiabank and RBC have no Canada filter (see their sections), and their
   data searches don't either.
+
+### Job cities (added 2026-11-03)
+
+`base.job_cities` turns each job's free-text `location` into a list of
+Canadian city names, and `db.py` stores it in `jobs.cities` on every upsert.
+Location strings come in every format ("TORONTO, Ontario, Canada", "Toronto,
+ON, CA, M5H 1H1", "AMER - Canada - Ontario - Toronto - University Ave"):
+
+- `CITY_PATTERNS` maps the common cities onto one name each, and folds
+  neighbourhoods into their city (Kanata → Ottawa, North York → Toronto).
+  Names shared with other countries' cities (London, Cambridge, Victoria,
+  Hamilton, ...) only match next to a Canadian province.
+- Any other place right before a province ("Kamloops, British Columbia",
+  "DORVAL, QC") is taken as a city too (`OTHER_CITY_PATTERN`).
+- "Remote" is added for remote, home-based and télétravail postings.
+- Scrapers must keep **every** Canadian location in `location`, not the
+  first few (Deloitte, Eightfold and FreshBooks used to cut it at 3), or
+  the City filter misses those jobs. EY's own site truncates its list
+  ("+15 more"), so EY can't be fixed.
+- On 2026-11-03 this found a city for 92% of jobs. The rest are mostly
+  "Canada"-only or non-Canadian locations.
 
 ### Fourth wave, batches 2–6 scraping approach (investigated 2026-09-25)
 

@@ -43,7 +43,6 @@ from .base import CANADA_PATTERN, DATA_SEARCH_TERMS, NormalizedJob, is_data_titl
 logger = logging.getLogger(__name__)
 
 MAX_PAGES = 50
-MAX_LOCATIONS_SHOWN = 3
 RATE_LIMIT_BACKOFF_SECONDS = (30, 60, 120)
 MAX_RETRY_AFTER_SECONDS = 300
 HEADERS = {
@@ -132,9 +131,7 @@ def _normalize(raw: dict, job_id: str, base_url: str, category_label: str | None
     if isinstance(locations, str):
         locations = [locations]
     canadian = [loc for loc in locations if CANADA_PATTERN.search(loc)] or locations
-    location = "; ".join(canadian[:MAX_LOCATIONS_SHOWN])
-    if len(canadian) > MAX_LOCATIONS_SHOWN:
-        location += f" (+{len(canadian) - MAX_LOCATIONS_SHOWN} more)"
+    location = "; ".join(canadian)
 
     timestamp = raw.get("postedTs") or raw.get("creationTs")
     position_url = raw.get("positionUrl") or f"/careers/job/{raw['id']}"

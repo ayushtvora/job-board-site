@@ -15,6 +15,8 @@ export function serializeJob(job: Job & { company: Company }) {
     company: job.company.name,
     title: job.title,
     externalId: job.externalId,
+    location: job.location,
+    cities: job.cities,
     url: job.url,
     platform: job.platform,
     field: job.field,

@@ -40,6 +40,9 @@ model Job {
   // "Software" or "Data", from the job title; set by the scraper (see
   // job_field in scraper/scrapers/base.py) for the UI's Field filter.
   field         String    @default("Software")
+  // Canadian cities in `location`, plus "Remote"; set by the scraper (see
+  // job_cities in scraper/scrapers/base.py) for the UI's City filter.
+  cities        String[]  @default([])
 
   company Company @relation(fields: [companyId], references: [slug])
 

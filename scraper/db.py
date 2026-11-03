@@ -3,7 +3,7 @@ from datetime import datetime
 
 import psycopg
 
-from scrapers.base import NormalizedJob, job_field
+from scrapers.base import NormalizedJob, job_cities, job_field
 
 
 def get_connection() -> psycopg.Connection:
@@ -42,10 +42,10 @@ def upsert_jobs_and_cleanup(conn: psycopg.Connection, company_slug: str, jobs: l
                 """
                 INSERT INTO jobs (
                     company_id, external_id, title, url, location, category,
-                    posted_date, platform, field, first_seen_at, last_seen_at, is_active
+                    posted_date, platform, field, cities, first_seen_at, last_seen_at, is_active
                 )
                 VALUES (%(company_id)s, %(external_id)s, %(title)s, %(url)s, %(location)s,
-                        %(category)s, %(posted_date)s, %(platform)s, %(field)s, now(), now(), true)
+                        %(category)s, %(posted_date)s, %(platform)s, %(field)s, %(cities)s, now(), now(), true)
                 ON CONFLICT (company_id, external_id) DO UPDATE SET
                     title = EXCLUDED.title,
                     url = EXCLUDED.url,
@@ -54,10 +54,16 @@ def upsert_jobs_and_cleanup(conn: psycopg.Connection, company_slug: str, jobs: l
                     posted_date = EXCLUDED.posted_date,
                     platform = EXCLUDED.platform,
                     field = EXCLUDED.field,
+                    cities = EXCLUDED.cities,
                     last_seen_at = now(),
                     is_active = true
                 """,
-                {"company_id": company_slug, **job, "field": job_field(job["title"])},
+                {
+                    "company_id": company_slug,
+                    **job,
+                    "field": job_field(job["title"]),
+                    "cities": job_cities(job["location"]),
+                },
             )
 
         cur.execute(

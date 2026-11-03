@@ -9,6 +9,8 @@ type Job = {
   company: string;
   title: string;
   externalId: string;
+  location: string;
+  cities: string[];
   url: string;
   platform: string;
   field: string;
@@ -39,6 +41,9 @@ type Company = {
 };
 
 const SCAN_POLL_INTERVAL_MS = 3000;
+// A posting can list many cities (Deloitte's go up to 20); the rest are
+// collapsed into "+N more", with the full list on hover.
+const MAX_CITIES_SHOWN = 3;
 
 // Values are days, sent as the API's postedWithin param; "" means any date.
 const POSTED_WITHIN_OPTIONS = [
@@ -63,6 +68,8 @@ export default function Home() {
   const [field, setField] = useState("");
   const [sector, setSector] = useState("");
   const [company, setCompany] = useState("");
+  const [city, setCity] = useState("");
+  const [cities, setCities] = useState<string[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
   const [scrapeStatuses, setScrapeStatuses] = useState<ScrapeStatus[]>([]);
@@ -78,12 +85,13 @@ export default function Home() {
     if (field) params.set("field", field);
     if (sector) params.set("sector", sector);
     if (company) params.set("company", company);
+    if (city) params.set("city", city);
     const query = params.toString();
     const res = await fetch(`/api/jobs${query ? `?${query}` : ""}`);
     const data: Job[] = await res.json();
     setJobs(data);
     setLoading(false);
-  }, [showHidden, postedWithin, field, sector, company]);
+  }, [showHidden, postedWithin, field, sector, company, city]);
 
   const loadScrapeStatus = useCallback(async () => {
     const res = await fetch("/api/scrape-status");
@@ -103,6 +111,9 @@ export default function Home() {
     fetch("/api/companies")
       .then((res) => res.json())
       .then((data: Company[]) => setCompanies(data));
+    fetch("/api/cities")
+      .then((res) => res.json())
+      .then((data: string[]) => setCities(data));
   }, []);
 
   // Pick up an already in-flight scan on page load, so refreshing the page
@@ -252,6 +263,15 @@ export default function Home() {
             ]}
             onChange={setCompany}
           />
+          <FilterSelect
+            label="City"
+            value={city}
+            options={[
+              { value: "", label: "All cities" },
+              ...cities.map((c) => ({ value: c, label: c })),
+            ]}
+            onChange={setCity}
+          />
           <label className={styles.showHidden}>
             <input
               type="checkbox"
@@ -272,6 +292,7 @@ export default function Home() {
               <tr>
                 <th>Company</th>
                 <th>Job Title</th>
+                <th>Location</th>
                 <th>Job ID</th>
                 <th>Link</th>
                 <th>Posted Date</th>
@@ -284,6 +305,7 @@ export default function Home() {
                 <tr key={job.id}>
                   <td>{job.company}</td>
                   <td>{job.title}</td>
+                  <td>{renderLocation(job)}</td>
                   <td>{job.externalId}</td>
                   <td>
                     <a
@@ -319,5 +341,21 @@ export default function Home() {
         )}
       </main>
     </div>
+  );
+}
+
+// The job's cities, or its raw location when no city could be picked out
+// of it (e.g. just "Canada"). Hovering shows the source site's own text.
+function renderLocation(job: Job) {
+  if (job.cities.length === 0) {
+    return <span className={styles.rawLocation}>{job.location}</span>;
+  }
+  const shown = job.cities.slice(0, MAX_CITIES_SHOWN).join(", ");
+  const hidden = job.cities.length - MAX_CITIES_SHOWN;
+  return (
+    <span title={job.location}>
+      {shown}
+      {hidden > 0 && <span className={styles.moreCities}> +{hidden} more</span>}
+    </span>
   );
 }
