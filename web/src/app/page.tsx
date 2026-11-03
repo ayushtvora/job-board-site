@@ -11,6 +11,7 @@ type Job = {
   externalId: string;
   url: string;
   platform: string;
+  field: string;
   postedDate: string;
   applied: boolean;
   willApply: boolean;
@@ -47,11 +48,19 @@ const POSTED_WITHIN_OPTIONS = [
   { value: "30", label: "Past month" },
 ];
 
+// Sent as the API's field param; "" means both.
+const FIELD_OPTIONS = [
+  { value: "", label: "All fields" },
+  { value: "Software", label: "Software" },
+  { value: "Data", label: "Data" },
+];
+
 export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [showHidden, setShowHidden] = useState(false);
   const [postedWithin, setPostedWithin] = useState("");
+  const [field, setField] = useState("");
   const [sector, setSector] = useState("");
   const [company, setCompany] = useState("");
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -66,6 +75,7 @@ export default function Home() {
     const params = new URLSearchParams();
     if (showHidden) params.set("showHidden", "true");
     if (postedWithin) params.set("postedWithin", postedWithin);
+    if (field) params.set("field", field);
     if (sector) params.set("sector", sector);
     if (company) params.set("company", company);
     const query = params.toString();
@@ -73,7 +83,7 @@ export default function Home() {
     const data: Job[] = await res.json();
     setJobs(data);
     setLoading(false);
-  }, [showHidden, postedWithin, sector, company]);
+  }, [showHidden, postedWithin, field, sector, company]);
 
   const loadScrapeStatus = useCallback(async () => {
     const res = await fetch("/api/scrape-status");
@@ -217,6 +227,7 @@ export default function Home() {
         </div>
 
         <div className={styles.filters}>
+          <FilterSelect label="Field" value={field} options={FIELD_OPTIONS} onChange={setField} />
           <FilterSelect
             label="Posted"
             value={postedWithin}

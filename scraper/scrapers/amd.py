@@ -17,7 +17,7 @@ iCIMS directly.
 
 import re
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 from .jibe import categories, scrape_jibe
 
 CATEGORIES = {"Engineering", "Information Technology"}
@@ -29,7 +29,7 @@ def _matches(raw: dict) -> bool:
     cats = categories(raw)
     if raw.get("country_code") != "CA":
         return False
-    if any(c in CATEGORIES for c in cats):
+    if any(c in CATEGORIES for c in cats) or is_data_title(raw.get("title") or ""):
         return True
     return STUDENT_CATEGORY in cats and bool(STUDENT_TITLE_PATTERN.search(raw.get("title") or ""))
 

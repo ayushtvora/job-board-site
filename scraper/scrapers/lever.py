@@ -7,7 +7,8 @@ exists but hasn't been needed).
 
 - No server-side country or department filter, so both are matched
   client-side: `country` is an ISO-2 code per posting (e.g. "CA"), and
-  `department_filter` gets `categories.department`.
+  `department_filter` gets `categories.department`. Jobs with a data
+  title are kept whatever their department.
 - Per posting: `id` (stable UUID, used as `external_id`), `text` (title),
   `categories.{department,team,location}`, `hostedUrl`, and `createdAt`
   (epoch milliseconds — a real posted date).
@@ -19,7 +20,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,8 @@ def scrape_lever(
     matched = [
         raw
         for raw in postings
-        if raw.get("country") == country and department_filter((raw.get("categories") or {}).get("department") or "")
+        if raw.get("country") == country
+        and (department_filter((raw.get("categories") or {}).get("department") or "") or is_data_title(raw["text"]))
     ]
     logger.info("%s: fetched %d matching jobs (of %d total)", name, len(matched), len(postings))
     return [_normalize(raw) for raw in matched]

@@ -20,7 +20,7 @@ import re
 
 import httpx
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,11 @@ def scrape() -> list[NormalizedJob]:
             if len(batch) < PAGE_SIZE:
                 break
 
-    jobs = [_normalize(raw) for raw in requisitions if TECH_TITLE_PATTERN.search(raw.get("requisitionTitle") or "")]
+    jobs = [
+        _normalize(raw)
+        for raw in requisitions
+        if TECH_TITLE_PATTERN.search(raw.get("requisitionTitle") or "") or is_data_title(raw.get("requisitionTitle") or "")
+    ]
     logger.info("BC Centre for Ability: fetched %d matching jobs (of %d postings)", len(jobs), len(requisitions))
     return jobs
 

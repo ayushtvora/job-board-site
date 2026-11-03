@@ -1,4 +1,4 @@
-"""Google careers scraper (Canada / free-text "Software Engineer" search).
+"""Google careers scraper (Canada / free-text "Software Engineer" search, plus data roles).
 
 Google's own careers site (careers.google.com, served under
 google.com/about/careers/applications/jobs/results) is a fully open,
@@ -20,6 +20,10 @@ multi-location and includes Canada (confirmed directly on one such job
 during investigation). This scraper takes the listing's displayed location
 as-is rather than fetching every detail page to find the "real" one, since
 the job itself is still a genuine match returned by Google's own filter.
+
+Data roles come from a second search, `q=data`, keeping only data titles
+(`base.is_data_title`); results are sorted by relevance, so paging stops
+at the first page without one. On 2026-11-02 it had ~2 pages for Canada.
 
 HTML structure (found via live inspection — CLAUDE.md deliberately didn't
 give an exact selector):
@@ -47,7 +51,7 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +60,8 @@ RESULTS_URL = f"{BASE_URL}/jobs/results"
 LOCATION = "Canada"
 QUERY = '"Software Engineer"'
 CATEGORY_LABEL = "Software Engineer (free-text search)"
+DATA_QUERY = "data"
+DATA_CATEGORY_LABEL = "Data (free-text search)"
 
 PAGE_SIZE = 20
 MAX_PAGES = 50  # safety cap; this query currently returns a handful of pages
@@ -66,22 +72,25 @@ def scrape() -> list[NormalizedJob]:
     seen_ids: set[str] = set()
 
     with httpx.Client(timeout=30, headers={"User-Agent": "Mozilla/5.0"}) as client:
-        for page in range(1, MAX_PAGES + 1):
-            response = client.get(RESULTS_URL, params={"location": LOCATION, "q": QUERY, "page": page})
-            response.raise_for_status()
+        for query, label, data_only in ((QUERY, CATEGORY_LABEL, False), (DATA_QUERY, DATA_CATEGORY_LABEL, True)):
+            for page in range(1, MAX_PAGES + 1):
+                response = client.get(RESULTS_URL, params={"location": LOCATION, "q": query, "page": page})
+                response.raise_for_status()
 
-            items = _extract_items(response.text)
-            if not items:
-                break
+                items = _extract_items(response.text)
+                if not items:
+                    break
 
-            for raw in items:
-                job_id = raw["id"]
-                if job_id in seen_ids:
-                    continue
-                seen_ids.add(job_id)
-                jobs.append(_normalize(raw))
-        else:
-            logger.warning("Google scrape hit MAX_PAGES=%d without finishing — got %d jobs", MAX_PAGES, len(jobs))
+                for raw in items:
+                    job_id = raw["id"]
+                    if job_id in seen_ids or (data_only and not is_data_title(raw["title"])):
+                        continue
+                    seen_ids.add(job_id)
+                    jobs.append(_normalize(raw, label))
+                if data_only and not any(is_data_title(raw["title"]) for raw in items):
+                    break
+            else:
+                logger.warning("Google scrape of %r hit MAX_PAGES=%d without finishing", query, MAX_PAGES)
 
     logger.info("Google: fetched %d jobs", len(jobs))
     return jobs
@@ -115,7 +124,7 @@ def _extract_items(html: str) -> list[dict]:
     return items
 
 
-def _normalize(raw: dict) -> NormalizedJob:
+def _normalize(raw: dict, category: str) -> NormalizedJob:
     slug_match = re.search(r"jobs/results/\d+-([^?]+)", raw["href"])
     slug = slug_match.group(1) if slug_match else ""
     url = f"{RESULTS_URL}/{raw['id']}-{slug}" if slug else f"{RESULTS_URL}/{raw['id']}"
@@ -125,7 +134,7 @@ def _normalize(raw: dict) -> NormalizedJob:
         "title": raw["title"],
         "url": url,
         "location": raw["location"],
-        "category": CATEGORY_LABEL,
+        "category": category,
         "posted_date": None,
         "platform": "Google Careers (custom, in-house)",
     }

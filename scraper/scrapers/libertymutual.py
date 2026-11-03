@@ -1,4 +1,4 @@
-"""Liberty Mutual careers scraper, scoped to Canada + Technology.
+"""Liberty Mutual careers scraper, scoped to Canada + Technology, plus data roles.
 
 Real careers URL is `https://searchjobs.libertymutualgroup.com/careers`,
 running on Eightfold (confirmed via `X-EF-NS`/`X-EF-CID` response headers).
@@ -10,8 +10,9 @@ this was found.
   `domain` must be `libertymutual.com`, **not** `libertymutualgroup.com` (the
   latter silently returns a generic 404-shell rather than an HTTP error).
 - `location=` and `department=` query params are real, server-side filters —
-  confirmed working (e.g. `department=Technology&location=Canada`) — so this
-  scraper uses them directly instead of filtering client-side.
+  confirmed working (e.g. `department=Technology&location=Canada`). Only
+  `location` is sent: the department is checked client-side so that data
+  titles from other departments are kept too.
 - Pagination via `start`/`num`.
 - CLAUDE.md documents 0 current Canada + Technology matches at investigation
   time — a legitimate empty result (this company has real jobs elsewhere,
@@ -23,7 +24,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,6 @@ def scrape() -> list[NormalizedJob]:
                     "num": PAGE_SIZE,
                     "query": "",
                     "location": LOCATION_FILTER,
-                    "department": DEPARTMENT_FILTER,
                 },
             )
             response.raise_for_status()
@@ -68,7 +68,8 @@ def scrape() -> list[NormalizedJob]:
                 if job_id in seen_ids:
                     continue
                 seen_ids.add(job_id)
-                jobs.append(_normalize(raw))
+                if raw.get("department") == DEPARTMENT_FILTER or is_data_title(raw.get("name") or ""):
+                    jobs.append(_normalize(raw))
 
             start += PAGE_SIZE
             if start >= total:

@@ -1,4 +1,4 @@
-"""Amazon careers scraper (Canada / Software Development category).
+"""Amazon careers scraper (Canada / Software Development category, plus data roles).
 
 Amazon's own careers site (amazon.jobs) exposes a fully open, unauthenticated
 JSON search API — no third-party ATS, no bot-blocking encountered. See
@@ -10,6 +10,11 @@ approach" section (Amazon bullet) for how this was found.
   actually filter server-side; the opposite forms (`category=` singular,
   `country[]=` array) are silently ignored, so those exact param names/forms
   matter.
+- Only `country=` is sent: Canada has a few hundred postings in all
+  (382 on 2026-11-02), so they're all read and scoped client-side to
+  the Software Development `job_category` or a data title. Data roles
+  are spread over several categories (Data Science, Business
+  Intelligence, Applied Science, ...).
 - Pagination is `offset`/`result_limit` in the query string; the response's
   `hits` field is the total match count — only trusted from the first page,
   per the same caution as the Workday scrapers (TD's `total` bug).
@@ -26,13 +31,12 @@ from datetime import datetime
 
 import httpx
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www.amazon.jobs"
 SEARCH_URL = f"{BASE_URL}/en/search.json"
-CATEGORY = "software-development"
 CATEGORY_LABEL = "Software Development"
 COUNTRY = "CAN"
 
@@ -51,7 +55,6 @@ def scrape() -> list[NormalizedJob]:
             response = client.get(
                 SEARCH_URL,
                 params={
-                    "category[]": CATEGORY,
                     "country": COUNTRY,
                     "result_limit": PAGE_SIZE,
                     "offset": offset,
@@ -72,7 +75,8 @@ def scrape() -> list[NormalizedJob]:
                 if job_id in seen_ids:
                     continue
                 seen_ids.add(job_id)
-                jobs.append(_normalize(raw))
+                if raw.get("job_category") == CATEGORY_LABEL or is_data_title(raw["title"]):
+                    jobs.append(_normalize(raw))
 
             offset += PAGE_SIZE
             if offset >= total:
@@ -80,7 +84,7 @@ def scrape() -> list[NormalizedJob]:
         else:
             logger.warning("Amazon scrape hit MAX_PAGES=%d without finishing — got %d jobs", MAX_PAGES, len(jobs))
 
-    logger.info("Amazon: fetched %d jobs (site reported hits=%s)", len(jobs), total)
+    logger.info("Amazon: fetched %d matching jobs (of %s Canadian postings)", len(jobs), total)
     return jobs
 
 

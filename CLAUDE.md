@@ -1,7 +1,8 @@
 # Job Board Site
 
 A personal tool that scrapes corporate career pages for job listings in specific
-fields, stores them in Postgres, and displays them in a web table where each job
+fields (software, plus data roles: data scientist/engineer/analyst, analytics,
+BI), stores them in Postgres, and displays them in a web table where each job
 has a persistent "Applied?" checkbox — so I can track which jobs I've already
 applied to without re-checking manually every time I revisit the site.
 
@@ -61,6 +62,9 @@ jobs
   platform      text             -- ATS platform, e.g. "Workday", "Eightfold"
                                   -- set by the scraper, used as the link text
                                   -- in the UI instead of the raw URL
+  field         text default 'Software' -- "Software" or "Data", set by the
+                                  -- scraper from the title (see "Data
+                                  -- roles" below); the UI's Field filter
 
   unique (company_id, external_id)
 
@@ -94,6 +98,9 @@ Scraper behavior:
   across runs for the same job — a random or run-dependent ID would break the
   `(company_id, external_id)` upsert match and create duplicate rows every
   scrape instead of updating `last_seen_at` on the existing one.
+- Every company's scope is its software/tech roles (below) **plus its
+  data roles**, wherever they sit on the site; see "Data roles" under
+  Shared ATS helpers.
 - `category` is free text straight from the source site — no normalization
   across companies is needed (a "Technology" category at one company doesn't
   need to line up with another's naming).
@@ -143,6 +150,7 @@ scope for now (a separate "show everything" view can cover those later if
 needed).
 
 Filter bar (alongside "Show hidden jobs"; all combine with AND):
+- **Field**: all / Software / Data, on `jobs.field`.
 - **Posted**: any time / past 24 hours / past week / past month, on the
   *effective* posted date (same fallback as the column), compared by
   calendar date since `posted_date` has no time. So "past 24 hours" means
@@ -167,9 +175,9 @@ Both routes live in the Next.js app (`web`), backed by Prisma.
 - `showHidden=true` drops the `is_active`/`applied` conditions from the
   filter (still respecting `will_apply = true`), per the "Show hidden jobs"
   toggle above.
-- Filter bar params: `postedWithin=<days>` (effective posted date within
-  the last N calendar days), `sector=<one of companies.sectors>`, and
-  `company=<companies.slug>`.
+- Filter bar params: `field=Software|Data`, `postedWithin=<days>`
+  (effective posted date within the last N calendar days),
+  `sector=<one of companies.sectors>`, and `company=<companies.slug>`.
 - Optional query params (future-friendly, not required for v1):
   `is_active`, `applied`, `will_apply` to override the default filter
   further, e.g. for a later "show everything" view.
@@ -182,6 +190,7 @@ Both routes live in the Next.js app (`web`), backed by Prisma.
     "externalId": "R-00012345",
     "url": "https://jobs.rbc.com/...",
     "platform": "Workday",
+    "field": "Software",
     "postedDate": "2026-09-10",
     "applied": false,
     "willApply": true
@@ -1265,6 +1274,43 @@ scraper. Each helper's docstring explains the API and the per-tenant hooks
   a country facet pass every Canadian `locations` ID (re-checked
   2026-10-02: SOTI, Ontario Teachers', PayPal and Intel each have only
   Ontario locations, so their lists are complete).
+
+### Data roles (added 2026-11-02)
+
+Every scraper also picks up Canadian **data roles** (data scientist /
+engineer / analyst, analytics, BI, statistics), whatever category or
+department they're filed under, and each job gets a `field` of "Data" or
+"Software".
+
+- It's all keyed on the job title, in `scrapers/base.py`:
+  `is_data_title` (`DATA_TITLE_PATTERN` minus `NOT_DATA_TITLE_PATTERN`,
+  which drops "Data Center", "Data Entry", "Data Privacy", annotation and
+  similar), and `job_field`, which `db.py` uses to set `jobs.field` on
+  every upsert. A data title that also says "software" ("Software Engineer,
+  Data Platform") counts as Software. Machine learning / AI titles count as
+  Software unless they mention data.
+- Category facets aren't used for data: they differ per site, many sites
+  have none, and a data role often sits in some other category (TD's Data
+  Scientists are spread across business lines). Title matching works the
+  same everywhere.
+- **Sites whose scope is filtered client-side** (Greenhouse, Ashby, Lever,
+  SmartRecruiters, Jibe, Dayforce, GC Jobs, Apple, Amazon, IBM, Meta, Uber,
+  and the title-keyword modules) keep any Canadian job with a data title.
+  Amazon, IBM, Meta and Liberty Mutual stopped sending their category
+  filter for this and now read all Canadian postings.
+- **Sites whose category filter runs on the server** (Workday facets,
+  Phenom `category=`, Jobs2Web category pages, Oracle
+  `selectedCategoriesFacet`, TalentBrew, Eightfold `filter_job_category`,
+  Google, EA) get a second keyword search for each of
+  `base.DATA_SEARCH_TERMS` ("data", "analytics"), same location filter,
+  no category, keeping data titles. These searches also match job
+  descriptions, but they're sorted by relevance with title matches first,
+  so paging stops at the first page without a data title. EA has no
+  keyword search wired up, so it reads its full Canada listing instead.
+- A module's own scope filter (`job_filter`, a title regex, etc.) is
+  bypassed for data titles, but a Canada filter still applies.
+- Scotiabank and RBC have no Canada filter (see their sections), and their
+  data searches don't either.
 
 ### Fourth wave, batches 2–6 scraping approach (investigated 2026-09-25)
 

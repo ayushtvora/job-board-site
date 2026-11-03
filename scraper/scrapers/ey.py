@@ -18,7 +18,7 @@ Rogers and Canada Life), via scrapers/jobs2web.py in `/search/` mode.
 
 import re
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 from .jobs2web import scrape_jobs2web
 
 TITLE_PATTERN = re.compile(
@@ -36,5 +36,6 @@ def scrape() -> list[NormalizedJob]:
         category_path=None,
         category_label="Technology (title match)",
         search_params={"optionsFacetsDD_country": "CA"},
-        job_filter=lambda job: bool(TITLE_PATTERN.search(job["title"])) and not EXCLUDE_PATTERN.search(job["title"]),
+        job_filter=lambda job: bool(TITLE_PATTERN.search(job["title"]) or is_data_title(job["title"]))
+        and not EXCLUDE_PATTERN.search(job["title"]),
     )

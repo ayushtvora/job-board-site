@@ -20,6 +20,9 @@ Per-tenant differences this absorbs:
   `eagerLoadRefineSearch` (`blob_key`).
 - Snowflake's `jobId` isn't its stable ID; `reqId` is (`id_field`).
 - The default sort isn't fully stable, so pages can overlap — deduped.
+- Data roles come from a second search, `?keywords=<term>` on the site's
+  search-results page for each of `DATA_SEARCH_TERMS`, keeping only data
+  titles. Sites whose category is a landing page pass `search_url`.
 """
 
 import json
@@ -28,7 +31,7 @@ from collections.abc import Callable
 
 import httpx
 
-from .base import NormalizedJob
+from .base import DATA_SEARCH_TERMS, NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +47,7 @@ def scrape_phenom(
     platform: str,
     categories: list[str] | None = None,
     params: dict | None = None,
+    search_url: str | None = None,
     job_url_template: str | None = None,
     blob_key: str = "eagerLoadRefineSearch",
     id_field: str = "jobId",
@@ -51,35 +55,49 @@ def scrape_phenom(
 ) -> list[NormalizedJob]:
     """Fetch each of `categories` via `?category=` (or `list_url` as-is if
     None), with `params` added to every request. `job_filter(raw_job)` can
-    drop jobs client-side (e.g. by `country`)."""
+    drop jobs client-side (e.g. by `country`), including data-search ones.
+    `search_url` is the site's search-results page for the data search;
+    it defaults to `list_url`, which is one already when `categories` is
+    used."""
     jobs: list[NormalizedJob] = []
     seen_ids: set[str] = set()
 
     with httpx.Client(timeout=30, headers=HEADERS, follow_redirects=True) as client:
-        for category in categories or [None]:
+
+        def scrape_pass(url: str, base_params: dict, key: str, data_only: bool, label: str) -> None:
+            """One paged listing. With `data_only`, only data titles are
+            kept, and paging stops at the first page without one (keyword
+            results are sorted by relevance)."""
             offset = 0
             for _ in range(MAX_PAGES):
-                request_params = {**(params or {}), "from": offset}
-                if category is not None:
-                    request_params["category"] = category
-                response = client.get(list_url, params=request_params)
+                response = client.get(url, params={**base_params, "from": offset})
                 response.raise_for_status()
-                search = _extract_ddo(response.text, name)[blob_key]
+                search = _extract_ddo(response.text, name)[key]
                 page_jobs = search["data"]["jobs"]
                 if not page_jobs:
                     break
                 for raw in page_jobs:
                     job_id = str(raw[id_field])
-                    if job_id in seen_ids:
+                    if job_id in seen_ids or (data_only and not is_data_title(raw["title"])):
                         continue
                     seen_ids.add(job_id)
                     if job_filter is None or job_filter(raw):
                         jobs.append(_normalize(raw, job_id, job_url_template, platform))
                 offset += len(page_jobs)
-                if offset >= search["totalHits"]:
+                if offset >= search["totalHits"] or (
+                    data_only and not any(is_data_title(raw["title"]) for raw in page_jobs)
+                ):
                     break
             else:
-                logger.warning("%s scrape of %r hit MAX_PAGES=%d", name, category, MAX_PAGES)
+                logger.warning("%s scrape of %r hit MAX_PAGES=%d", name, label, MAX_PAGES)
+
+        for category in categories or [None]:
+            category_params = {**(params or {})}
+            if category is not None:
+                category_params["category"] = category
+            scrape_pass(list_url, category_params, blob_key, data_only=False, label=category)
+        for term in DATA_SEARCH_TERMS:
+            scrape_pass(search_url or list_url, {"keywords": term}, "eagerLoadRefineSearch", data_only=True, label=term)
 
     logger.info("%s: fetched %d jobs", name, len(jobs))
     return jobs

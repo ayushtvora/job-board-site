@@ -24,7 +24,7 @@ section for how this was found.
 
 import re
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 from .oracle_recruiting import scrape_oracle_recruiting
 
 # CLAUDE.md's recommended keyword list for spotting IT-adjacent titles at a
@@ -34,6 +34,11 @@ from .oracle_recruiting import scrape_oracle_recruiting
 _KEYWORD_PATTERN = re.compile(r"I&IT|\bIT\b|Software|Developer|Systems", re.IGNORECASE)
 
 
+def _category(raw: dict) -> str:
+    match = _KEYWORD_PATTERN.search(raw["Title"])
+    return match.group(0) if match else "Data"
+
+
 def scrape() -> list[NormalizedJob]:
     return scrape_oracle_recruiting(
         name="Metrolinx",
@@ -41,6 +46,6 @@ def scrape() -> list[NormalizedJob]:
         facets_list="LOCATIONS;WORK_LOCATIONS;TITLES;CATEGORIES;ORGANIZATIONS;POSTING_DATES;FLEX_FIELDS",
         expand="requisitionList.secondaryLocations,flexFieldsFacet.values",
         sort_by="POSTING_DATES_DESC",
-        job_filter=lambda raw: bool(_KEYWORD_PATTERN.search(raw.get("Title") or "")),
-        category_fn=lambda raw: _KEYWORD_PATTERN.search(raw["Title"]).group(0),
+        job_filter=lambda raw: bool(_KEYWORD_PATTERN.search(raw.get("Title") or "")) or is_data_title(raw.get("Title") or ""),
+        category_fn=_category,
     )

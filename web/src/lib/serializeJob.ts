@@ -17,6 +17,7 @@ export function serializeJob(job: Job & { company: Company }) {
     externalId: job.externalId,
     url: job.url,
     platform: job.platform,
+    field: job.field,
     postedDate: effectivePostedDate(job).toISOString().slice(0, 10),
     applied: job.applied,
     willApply: job.willApply,

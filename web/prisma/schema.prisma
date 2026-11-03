@@ -37,6 +37,9 @@ model Job {
   appliedAt     DateTime? @map("applied_at")
   willApply     Boolean   @default(true) @map("will_apply")
   platform      String
+  // "Software" or "Data", from the job title; set by the scraper (see
+  // job_field in scraper/scrapers/base.py) for the UI's Field filter.
+  field         String    @default("Software")
 
   company Company @relation(fields: [companyId], references: [slug])
 

@@ -18,6 +18,9 @@ Same API as the Airbnb/Databricks/Stripe/Reddit scrapers (see CLAUDE.md's
   unreliable — see the Stripe/Airbnb notes in CLAUDE.md), and
   `first_published` is the true original posting date.
 
+Jobs with a data title (`base.is_data_title`) are kept whatever their
+department, so each board's data roles are included too.
+
 Boards without a usable department tree can pass `departments=None` and
 filter with `job_filter` instead (e.g. Riot's "Craft" metadata field, or
 Stripe's title/department-name heuristic), and `category_fn` overrides the
@@ -29,7 +32,7 @@ from collections.abc import Callable
 
 import httpx
 
-from .base import CANADA_PATTERN, NormalizedJob
+from .base import CANADA_PATTERN, NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +48,8 @@ def scrape_greenhouse(
     category_fn: Callable[[dict], str] | None = None,
 ) -> list[NormalizedJob]:
     """`departments=None` skips department filtering. `job_filter(raw)` and
-    `is_canada(raw)` drop jobs client-side; see the module docstring."""
+    `is_canada(raw)` drop jobs client-side; see the module docstring.
+    `job_filter` only narrows the department scope, so data titles skip it."""
     base = f"https://boards-api.greenhouse.io/v1/boards/{board_token}"
     with httpx.Client(timeout=60) as client:
         jobs_response = client.get(f"{base}/jobs", params={"content": "true"})
@@ -59,8 +63,13 @@ def scrape_greenhouse(
     matched = [
         raw
         for raw in raw_jobs
-        if (departments is None or _in_departments(raw, dept_tree, departments, exclude_departments))
-        and (job_filter is None or job_filter(raw))
+        if (
+            (
+                (departments is None or _in_departments(raw, dept_tree, departments, exclude_departments))
+                and (job_filter is None or job_filter(raw))
+            )
+            or is_data_title(raw["title"])
+        )
         and canada_check(raw)
     ]
     logger.info("%s: fetched %d matching jobs (of %d total)", name, len(matched), len(raw_jobs))

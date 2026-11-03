@@ -1,4 +1,4 @@
-"""Shopify careers scraper, scoped to Canada/Americas + Engineering.
+"""Shopify careers scraper, scoped to Canada/Americas + Engineering, plus data roles.
 
 Shopify's real ATS is **Ashby** (every job links as
 `shopify.com/careers?ashby_jid=<uuid>`), but there's no public Ashby job
@@ -21,8 +21,8 @@ and React Router serves each page's loader data on its own at
   for its `jobPosting` (`teamName` e.g. "Engineering", `publishedDate`
   plain ISO date, `externalLink`, `locationIds`) and its `locations`
   (each with a `name` and, usually, `address.postalAddress.addressCountry`).
-  The "Engineering & Data" discipline also has data roles, so scope is
-  still `teamName == "Engineering"`.
+  Scope is `teamName == "Engineering"` or a data title; roles from
+  other disciplines are fetched too when their title is a data title.
 - **Canada caveat**: Shopify is remote-first. As of 2026-09-25 all 44
   Engineering postings are listed only under the region "Americas" (country
   field literally "Americas"), not a Canadian city — same shape of problem
@@ -36,7 +36,7 @@ import logging
 
 import httpx
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -54,14 +54,17 @@ _TURBO_SENTINELS = {-1: None, -2: None, -3: None, -4: None, -5: None, -6: None, 
 def scrape() -> list[NormalizedJob]:
     with httpx.Client(timeout=30, headers={"User-Agent": "Mozilla/5.0"}) as client:
         roles = _load(client, "/careers/jobs", LIST_ROUTE_KEY)["roles"]
-        candidates = [role for role in roles if role.get("disciplineSlug") == DISCIPLINE_SLUG]
+        candidates = [
+            role for role in roles if role.get("disciplineSlug") == DISCIPLINE_SLUG or is_data_title(role["title"])
+        ]
 
         jobs = []
         for role in candidates:
             detail = _load(client, role["href"], DETAIL_ROUTE_KEY)
             posting = detail["jobPosting"]
             locations = {loc["id"]: loc for loc in detail.get("locations") or []}
-            if posting.get("teamName") == TEAM_NAME and _matches_location(posting, locations):
+            in_scope = posting.get("teamName") == TEAM_NAME or is_data_title(posting["title"])
+            if in_scope and _matches_location(posting, locations):
                 jobs.append(_normalize(posting, locations))
 
     logger.info(

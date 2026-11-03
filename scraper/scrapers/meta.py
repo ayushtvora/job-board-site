@@ -1,4 +1,4 @@
-"""Meta careers scraper (Canada / Software Engineering jobs).
+"""Meta careers scraper (Canada / Software Engineering jobs, plus data roles).
 
 Unlike every other scraper in this project, Meta cannot be scraped with a
 lightweight `httpx` request. `metacareers.com` returns HTTP 400 to plain
@@ -58,6 +58,10 @@ Live-reconfirmed details (2026-09-21), refining CLAUDE.md's investigation:
   render the correct job (live-verified for a real job ID). The `/jobs/<id>/`
   form is used as the stored `url` since it's simpler and permanently
   redirects.
+- **The team is filtered client-side** (since 2026-11-02): the URL only
+  carries the Canadian offices, and jobs are kept if their `teams`
+  include Software Engineering or their title is a data title, so data
+  roles on any team are picked up.
 - **No posted-date field anywhere** in the search response (only `id`,
   `title`, `locations`, `teams`, `sub_teams`) — `posted_date` is left `None`,
   per CLAUDE.md; the UI's `first_seen_at` fallback handles display.
@@ -76,7 +80,7 @@ import urllib.parse
 
 from playwright.sync_api import sync_playwright
 
-from .base import BROWSER_LOCK, NormalizedJob
+from .base import BROWSER_LOCK, NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -98,8 +102,7 @@ RESPONSE_TIMEOUT_MS = 30_000
 
 
 def _search_url() -> str:
-    params = [("teams[0]", TEAM)]
-    params += [(f"offices[{i}]", office_id) for i, office_id in enumerate(CANADA_OFFICE_IDS)]
+    params = [(f"offices[{i}]", office_id) for i, office_id in enumerate(CANADA_OFFICE_IDS)]
     query = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
     return f"https://www.metacareers.com/jobs?{query}"
 
@@ -132,9 +135,11 @@ def scrape() -> list[NormalizedJob]:
 
     raw_jobs = payload["data"]["job_search_with_featured_jobs_v2"]["all_jobs"]
 
-    jobs: list[NormalizedJob] = [_normalize(raw) for raw in raw_jobs]
+    jobs: list[NormalizedJob] = [
+        _normalize(raw) for raw in raw_jobs if TEAM in (raw.get("teams") or []) or is_data_title(raw["title"])
+    ]
 
-    logger.info("Meta: fetched %d jobs (Canada + %s)", len(jobs), TEAM)
+    logger.info("Meta: fetched %d matching jobs (of %d Canadian jobs)", len(jobs), len(raw_jobs))
     return jobs
 
 

@@ -21,6 +21,9 @@ export async function GET(request: NextRequest) {
   const company = params.get("company");
   if (company) where.companyId = company;
 
+  const field = params.get("field");
+  if (field) where.field = field;
+
   const sector = params.get("sector");
   if (sector) where.company = { sectors: { has: sector } };
 

@@ -16,5 +16,6 @@ def scrape() -> list[NormalizedJob]:
         name="RBC",
         list_url="https://jobs.rbc.com/ca/en/c/technology-analytics-research-jobs",
         params={"s": 1},
+        search_url="https://jobs.rbc.com/ca/en/search-results",
         platform="Workday",
     )

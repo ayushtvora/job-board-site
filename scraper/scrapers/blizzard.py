@@ -39,6 +39,7 @@ def scrape() -> list[NormalizedJob]:
         list_url="https://careers.blizzard.com/global/en/engineering-technology",
         params={"rk": "l-engineering-technology"},
         blob_key="targetedJobs",
+        search_url="https://careers.blizzard.com/global/en/search-results",
         platform="Workday",
         job_filter=lambda raw: raw.get("country") == "Canada",
     )

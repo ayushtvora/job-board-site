@@ -5,6 +5,8 @@ Jibe front-ends (job URLs like `/jobs/<reqId>?lang=en-us`, apply links to
 `GET <base_url>/api/jobs?page=N&internal=false` (no auth, 10 jobs per page,
 `totalCount` in the response, each job wrapped as `{"data": {...}}`).
 
+- `job_filter` sees every posting, so it's where each tenant keeps data
+  titles (`base.is_data_title`) alongside its categories.
 - Some tenants accept server-side filters as extra query params (AMD's
   `location=Canada` narrows 1,000+ jobs to the Canadian ones); pass them in
   `params`. Everything else is filtered client-side with `job_filter`.

@@ -27,7 +27,7 @@ from datetime import datetime
 
 import httpx
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,8 @@ def scrape() -> list[NormalizedJob]:
                 break
             for raw in new:
                 seen_ids.add(raw["id"])
-                if TITLE_PATTERN.search(raw.get("unifiedStandardTitle") or ""):
+                title = raw.get("unifiedStandardTitle") or ""
+                if TITLE_PATTERN.search(title) or is_data_title(title):
                     jobs.append(_normalize(raw))
             if len(seen_ids) >= total:
                 break

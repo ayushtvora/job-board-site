@@ -1,4 +1,4 @@
-"""EA careers scraper, scoped to Canada + Software Development.
+"""EA careers scraper, scoped to Canada + Software Development, plus data roles.
 
 EA's careers site runs on Avature. Unlike RBC/SOTI, job data isn't embedded
 as a single JSON blob — this is a plain server-rendered HTML listing, parsed
@@ -33,6 +33,11 @@ this was found.
   jobs in that slice get an exact `posted_date`; older jobs fall back to
   `None`, per the posted-date-fallback rule in CLAUDE.md (the UI shows
   `first_seen_at` instead of a blank date).
+- Data roles come from a second listing with only the Country filter
+  (162 Canadian postings on 2026-11-02, 9 pages), keeping data titles.
+  Its RSS feed is read too, for those jobs' posted dates. Data roles have
+  no category facet of their own here (the Job Category IDs would need
+  another Playwright pass), hence the title match.
 - `platform` = `"Avature"` for EA.
 """
 
@@ -45,7 +50,7 @@ from xml.etree import ElementTree
 import httpx
 from bs4 import BeautifulSoup
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +68,8 @@ FILTER_PARAMS = {
     "listFilterMode": "1",
 }
 CATEGORY_LABEL = "Software Development"
+COUNTRY_PARAMS = {key: value for key, value in FILTER_PARAMS.items() if not key.startswith("4536")}
+DATA_CATEGORY_LABEL = "Data (title match)"
 
 PAGE_SIZE = 20  # the site's actual (unconfigurable) page size — see docstring
 MAX_PAGES = 50  # safety cap; this filter currently has ~50 jobs
@@ -72,40 +79,47 @@ RESULTS_COUNT_RE = re.compile(r'aria-label="(\d+) results"')
 
 
 def scrape() -> list[NormalizedJob]:
+    jobs: list[NormalizedJob] = []
+    seen_ids: set[str] = set()
+
     with httpx.Client(timeout=30) as client:
-        posted_dates = _fetch_posted_dates(client)
+        posted_dates = _fetch_posted_dates(client, FILTER_PARAMS) | _fetch_posted_dates(client, COUNTRY_PARAMS)
 
-        jobs: list[NormalizedJob] = []
-        seen_ids: set[str] = set()
-        offset = 0
-        total: int | None = None
+        def scrape_listing(filter_params: dict[str, str], data_only: bool) -> int:
+            offset = 0
+            total: int | None = None
+            for _ in range(MAX_PAGES):
+                response = client.get(LIST_URL, params={**filter_params, "jobOffset": offset})
+                response.raise_for_status()
 
-        for _ in range(MAX_PAGES):
-            response = client.get(LIST_URL, params={**FILTER_PARAMS, "jobOffset": offset})
-            response.raise_for_status()
+                if total is None:
+                    match = RESULTS_COUNT_RE.search(response.text)
+                    total = int(match.group(1)) if match else 0
 
-            if total is None:
-                match = RESULTS_COUNT_RE.search(response.text)
-                total = int(match.group(1)) if match else 0
+                page_jobs = _parse_listing(response.text)
+                if not page_jobs:
+                    break
 
-            page_jobs = _parse_listing(response.text)
-            if not page_jobs:
-                break
+                for job in page_jobs:
+                    if job["external_id"] in seen_ids or (data_only and not is_data_title(job["title"])):
+                        continue
+                    seen_ids.add(job["external_id"])
+                    job["posted_date"] = posted_dates.get(job["external_id"])
+                    if data_only:
+                        job["category"] = DATA_CATEGORY_LABEL
+                    jobs.append(job)
 
-            for job in page_jobs:
-                if job["external_id"] in seen_ids:
-                    continue
-                seen_ids.add(job["external_id"])
-                job["posted_date"] = posted_dates.get(job["external_id"])
-                jobs.append(job)
+                offset += PAGE_SIZE
+                if offset >= total:
+                    break
+            else:
+                logger.warning("EA scrape hit MAX_PAGES=%d without finishing — got %d jobs", MAX_PAGES, len(jobs))
+            return total or 0
 
-            offset += PAGE_SIZE
-            if offset >= total:
-                break
-        else:
-            logger.warning("EA scrape hit MAX_PAGES=%d without finishing — got %d jobs", MAX_PAGES, len(jobs))
+        total = scrape_listing(FILTER_PARAMS, data_only=False)
+        scrape_listing(COUNTRY_PARAMS, data_only=True)
 
-    logger.info("EA: fetched %d jobs (site reported total=%s)", len(jobs), total)
+    logger.info("EA: fetched %d jobs (site reported total=%s for Software Development)", len(jobs), total)
     return jobs
 
 
@@ -138,14 +152,14 @@ def _parse_listing(html: str) -> list[NormalizedJob]:
     return jobs
 
 
-def _fetch_posted_dates(client: httpx.Client) -> dict[str, str]:
+def _fetch_posted_dates(client: httpx.Client, filter_params: dict[str, str]) -> dict[str, str]:
     """Best-effort external_id -> "YYYY-MM-DD" lookup from the RSS feed.
 
     Only covers the ~20 most recently posted jobs matching the filter (see
     module docstring) — callers should treat a miss as "date unknown", not
     an error.
     """
-    response = client.get(FEED_URL, params=FILTER_PARAMS)
+    response = client.get(FEED_URL, params=filter_params)
     response.raise_for_status()
 
     root = ElementTree.fromstring(response.text)

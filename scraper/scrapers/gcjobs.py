@@ -28,7 +28,7 @@ from collections.abc import Callable
 import httpx
 from bs4 import BeautifulSoup
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ TECH_TITLE_PATTERN = re.compile(
 
 def scrape_gcjobs(*, name: str, org_filter: Callable[[str], bool]) -> list[NormalizedJob]:
     """Every GC Jobs posting whose organization passes `org_filter` and
-    whose title matches TECH_TITLE_PATTERN."""
+    whose title matches TECH_TITLE_PATTERN or is a data title."""
     postings: dict[str, NormalizedJob] = {}
 
     with httpx.Client(timeout=60, headers=HEADERS, follow_redirects=True) as client:
@@ -81,7 +81,11 @@ def scrape_gcjobs(*, name: str, org_filter: Callable[[str], bool]) -> list[Norma
 
     if not postings:
         raise RuntimeError("GC Jobs returned no postings at all; the page layout may have changed")
-    jobs = [job for job in postings.values() if org_filter(job["category"]) and TECH_TITLE_PATTERN.search(job["title"])]
+    jobs = [
+        job
+        for job in postings.values()
+        if org_filter(job["category"]) and (TECH_TITLE_PATTERN.search(job["title"]) or is_data_title(job["title"]))
+    ]
     logger.info("%s: fetched %d matching jobs (of %d GC Jobs postings)", name, len(jobs), len(postings))
     return jobs
 

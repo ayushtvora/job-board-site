@@ -12,7 +12,7 @@ helper only reads a `.jobDate` column, which this site doesn't have, so
 
 import re
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 from .jobs2web import scrape_jobs2web
 
 TECH_TITLE_PATTERN = re.compile(
@@ -28,5 +28,5 @@ def scrape() -> list[NormalizedJob]:
         base_url="https://careers.bankofcanada.ca",
         category_path=None,
         category_label="Information Technology",
-        job_filter=lambda job: bool(TECH_TITLE_PATTERN.search(job["title"])),
+        job_filter=lambda job: bool(TECH_TITLE_PATTERN.search(job["title"])) or is_data_title(job["title"]),
     )

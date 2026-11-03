@@ -19,6 +19,8 @@ ID is in the site's own job URLs (`/job/<city>/<slug>/<org>/<id>`).
   `.job-date-posted` ("MM/DD/YYYY"); Intuit shows neither, so its category
   comes from the item's `data-category`, or else the passed label, and
   `posted_date` is None.
+- Data roles come from a second search with only the Canada facet and
+  `Keywords=<term>` for each of `DATA_SEARCH_TERMS`, keeping data titles.
 - TalentBrew is only the career-site layer; the apply flow goes to the real
   ATS (Avature for both Intuit and Synopsys), passed as `platform`.
 """
@@ -30,11 +32,12 @@ from datetime import datetime
 import httpx
 from bs4 import BeautifulSoup
 
-from .base import NormalizedJob
+from .base import DATA_SEARCH_TERMS, NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
 CANADA_GEONAME_ID = "6251999"
+DATA_SEARCH_CATEGORY = "Data (keyword search)"
 MAX_PAGES = 20
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
@@ -52,42 +55,56 @@ def scrape_talentbrew(
     category_label: str,
     platform: str,
 ) -> list[NormalizedJob]:
-    """Scrape Canada + the given category facet IDs."""
-    facets = [(CANADA_GEONAME_ID, "2")] + [(category_id, "1") for category_id in category_ids]
+    """Scrape Canada + the given category facet IDs, then Canada + a keyword
+    search for data roles."""
     jobs: dict[str, NormalizedJob] = {}
-    total_pages = 1
-    page = 1
 
     with httpx.Client(timeout=30, headers=HEADERS) as client:
-        while page <= min(total_pages, MAX_PAGES):
-            params = {
-                "OrganizationIds": org_id,
-                "CurrentPage": str(page),
-                "RecordsPerPage": "50",
-                "SearchType": "5",
-                "SearchResultsModuleName": "Search Results",
-                "SearchFiltersModuleName": "Search Filters",
-            }
-            for i, (facet_id, facet_type) in enumerate(facets):
-                params[f"FacetFilters[{i}].ID"] = facet_id
-                params[f"FacetFilters[{i}].FacetType"] = facet_type
-                params[f"FacetFilters[{i}].IsApplied"] = "true"
-            response = client.get(f"{base_url}/search-jobs/results", params=params)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.json()["results"], "html.parser")
-            section = soup.select_one("section#search-results")
-            if section is not None and section.get("data-total-pages"):
-                total_pages = int(section["data-total-pages"])
 
-            new_on_page = 0
-            for link in soup.select("#search-results-list a[href*='/job/']"):
-                job = _parse(link, base_url, category_label, platform)
-                if job is not None and job["external_id"] not in jobs:
+        def scrape_pass(facets: list[tuple[str, str]], keywords: str, label: str, data_only: bool) -> None:
+            total_pages = 1
+            page = 1
+            while page <= min(total_pages, MAX_PAGES):
+                params = {
+                    "OrganizationIds": org_id,
+                    "CurrentPage": str(page),
+                    "RecordsPerPage": "50",
+                    "SearchType": "5",
+                    "SearchResultsModuleName": "Search Results",
+                    "SearchFiltersModuleName": "Search Filters",
+                }
+                if keywords:
+                    params["Keywords"] = keywords
+                for i, (facet_id, facet_type) in enumerate(facets):
+                    params[f"FacetFilters[{i}].ID"] = facet_id
+                    params[f"FacetFilters[{i}].FacetType"] = facet_type
+                    params[f"FacetFilters[{i}].IsApplied"] = "true"
+                response = client.get(f"{base_url}/search-jobs/results", params=params)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.json()["results"], "html.parser")
+                section = soup.select_one("section#search-results")
+                if section is not None and section.get("data-total-pages"):
+                    total_pages = int(section["data-total-pages"])
+
+                new_on_page = 0
+                data_on_page = False
+                for link in soup.select("#search-results-list a[href*='/job/']"):
+                    job = _parse(link, base_url, label, platform)
+                    if job is None:
+                        continue
+                    data_on_page = data_on_page or is_data_title(job["title"])
+                    if job["external_id"] in jobs or (data_only and not is_data_title(job["title"])):
+                        continue
                     jobs[job["external_id"]] = job
                     new_on_page += 1
-            if new_on_page == 0:
-                break
-            page += 1
+                if (new_on_page == 0 and not data_only) or (data_only and not data_on_page):
+                    break
+                page += 1
+
+        canada = [(CANADA_GEONAME_ID, "2")]
+        scrape_pass(canada + [(category_id, "1") for category_id in category_ids], "", category_label, data_only=False)
+        for term in DATA_SEARCH_TERMS:
+            scrape_pass(canada, term, DATA_SEARCH_CATEGORY, data_only=True)
 
     logger.info("%s: fetched %d jobs", name, len(jobs))
     return list(jobs.values())

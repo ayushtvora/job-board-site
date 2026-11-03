@@ -16,6 +16,8 @@ a Playwright network capture (2026-09-25):
   found in the page's JS bundle. IDs + names come from
   `GET /api/geo/<ns>/postingattributes/departments/<ns>/<jobBoardId>/<locale>`,
   so scrapers pick departments by name at runtime, one search per department.
+  With a department filter, one more search without `departmentId` picks
+  up data titles from every department.
 - Per posting: `jobPostingId` (used as `external_id` — a requisition can
   have several postings), `jobReqId`, `jobTitle`, `postingStartTimestampUTC`
   (real posted date), `postingLocations[]` with `isoCountryCode`
@@ -27,7 +29,7 @@ from collections.abc import Callable
 
 import httpx
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +49,8 @@ def scrape_dayforce(
     department_filter: Callable[[str], bool] | None = None,
     country_code: str = "CA",
 ) -> list[NormalizedJob]:
-    """`department_filter(name)` selects departments to search; None = all jobs."""
+    """`department_filter(name)` selects departments to search; None = all
+    jobs. Data titles are kept from every department either way."""
     search_url = f"{BASE_URL}/api/geo/{namespace}/jobposting/search"
     jobs: list[NormalizedJob] = []
     seen_ids: set[int] = set()
@@ -57,20 +60,22 @@ def scrape_dayforce(
         csrf.raise_for_status()
         headers = {"x-csrf-token": csrf.json()["csrfToken"]}
 
+        # (department id, department name, keep only data titles)
         if department_filter is None:
-            searches: list[tuple[int | None, str]] = [(None, "")]
+            searches: list[tuple[int | None, str, bool]] = [(None, "", False)]
         else:
             dept_response = client.get(
                 f"{BASE_URL}/api/geo/{namespace}/postingattributes/departments/{namespace}/{job_board_id}/{CULTURE}"
             )
             dept_response.raise_for_status()
             searches = [
-                (dept["attributeId"], dept["attributeValue"])
+                (dept["attributeId"], dept["attributeValue"], False)
                 for dept in dept_response.json()["postingAttributesAttributesList"]
                 if department_filter(dept["attributeValue"])
             ]
+            searches.append((None, "", True))
 
-        for department_id, department_name in searches:
+        for department_id, department_name, data_only in searches:
             start = 0
             for _ in range(MAX_PAGES):
                 body = {
@@ -87,7 +92,7 @@ def scrape_dayforce(
                 payload = response.json()
                 postings = payload.get("jobPostings") or []
                 for raw in postings:
-                    if raw["jobPostingId"] in seen_ids:
+                    if raw["jobPostingId"] in seen_ids or (data_only and not is_data_title(raw["jobTitle"])):
                         continue
                     seen_ids.add(raw["jobPostingId"])
                     if not _in_country(raw, country_code):

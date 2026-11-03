@@ -18,7 +18,7 @@ API and CSRF details).
 
 import re
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 from .dayforce import scrape_dayforce
 
 TITLE_PATTERN = re.compile(r"software|developer|engineer|\bIT\b|\bAI\b|data|scada|controls", re.IGNORECASE)
@@ -29,5 +29,5 @@ def scrape() -> list[NormalizedJob]:
     return [
         {**job, "category": job["category"] or "Engineering"}
         for job in jobs
-        if TITLE_PATTERN.search(job["title"])
+        if TITLE_PATTERN.search(job["title"]) or is_data_title(job["title"])
     ]

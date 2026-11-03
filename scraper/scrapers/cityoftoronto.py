@@ -14,7 +14,7 @@ location is set to "Toronto, ON".
 
 import re
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 from .jobs2web import scrape_jobs2web
 
 TECH_TITLE_PATTERN = re.compile(
@@ -35,6 +35,8 @@ def scrape() -> list[NormalizedJob]:
 
 
 def _keep(job: NormalizedJob) -> bool:
+    if is_data_title(job["title"]):
+        return True
     if job["category"]:
         return job["category"] == "Information & Technology"
     return bool(TECH_TITLE_PATTERN.search(job["title"]))

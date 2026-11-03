@@ -23,7 +23,7 @@ from datetime import datetime
 import httpx
 from bs4 import BeautifulSoup
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ def scrape() -> list[NormalizedJob]:
                 seen.add(req)
                 new_on_page += 1
                 title = cells[2].get_text(" ", strip=True)
-                if IS_CLASSIFICATION_RE.match(title) or TECH_TITLE_PATTERN.search(title):
+                if IS_CLASSIFICATION_RE.match(title) or TECH_TITLE_PATTERN.search(title) or is_data_title(title):
                     jobs.append(_normalize(cells, req, title))
             if new_on_page == 0:
                 break

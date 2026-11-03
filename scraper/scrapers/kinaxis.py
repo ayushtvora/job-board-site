@@ -9,14 +9,16 @@ Kinaxis' careers site `join.kinaxis.com` is an iCIMS "Jibe" front-end
   in Engineering / Information Technology (30 jobs).
 """
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 from .jibe import categories, scrape_jibe
 
 CATEGORIES = {"Engineering", "Information Technology"}
 
 
 def _matches(raw: dict) -> bool:
-    return raw.get("country_code") == "CA" and any(c in CATEGORIES for c in categories(raw))
+    return raw.get("country_code") == "CA" and (
+        any(c in CATEGORIES for c in categories(raw)) or is_data_title(raw.get("title") or "")
+    )
 
 
 def scrape() -> list[NormalizedJob]:

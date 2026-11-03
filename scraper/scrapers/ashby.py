@@ -7,7 +7,8 @@ public, unauthenticated posting API — returns every listed job in one call
 `address.postalAddress.addressCountry`, `publishedAt` (real ISO datetime),
 and `jobUrl`.
 
-No server-side filtering, so Canada and department are matched client-side:
+No server-side filtering, so Canada and department are matched client-side
+(jobs with a data title are kept whatever their department):
 Canada if the primary address or any secondary location's address has
 `addressCountry == "Canada"`, or any location name mentions Canada.
 
@@ -22,7 +23,7 @@ from collections.abc import Callable
 
 import httpx
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ def scrape_ashby(
     job_filter: Callable[[dict], bool] | None = None,
 ) -> list[NormalizedJob]:
     """`departments=None` skips department matching; `job_filter(raw)` can
-    drop jobs client-side."""
+    narrow the department scope client-side (data titles skip both)."""
     with httpx.Client(timeout=30) as client:
         response = client.get(f"https://api.ashbyhq.com/posting-api/job-board/{org}")
         response.raise_for_status()
@@ -45,8 +46,13 @@ def scrape_ashby(
         raw
         for raw in raw_jobs
         if raw.get("isListed", True)
-        and (departments is None or (raw.get("department") or "").strip() in departments)
-        and (job_filter is None or job_filter(raw))
+        and (
+            (
+                (departments is None or (raw.get("department") or "").strip() in departments)
+                and (job_filter is None or job_filter(raw))
+            )
+            or is_data_title(raw["title"])
+        )
         and _is_canada(raw)
     ]
     logger.info("%s: fetched %d matching jobs (of %d total)", name, len(matched), len(raw_jobs))

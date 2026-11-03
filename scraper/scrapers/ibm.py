@@ -1,4 +1,4 @@
-"""IBM careers scraper (Canada / Software Engineering).
+"""IBM careers scraper (Canada / Software Engineering, plus data roles).
 
 Job *discovery* goes through IBM's own custom Elasticsearch-backed search
 index at www-api.ibm.com, not through IBM's actual application system of
@@ -24,6 +24,10 @@ was found; the exact request-body shape below was confirmed live on
 - Confirmed working filter terms (matches CLAUDE.md exactly):
   `{"term": {"field_keyword_08": "Software Engineering"}}` and
   `{"term": {"field_keyword_05": "Canada"}}`, both inside `query.bool.must`.
+- Only the Canada term is sent now: Canada has few postings (62 on
+  2026-11-02), so they're all read and scoped client-side to
+  `field_keyword_08` (the category) of "Software Engineering" or "Data &
+  Analytics", or a data title.
 - `_source` must be an explicit list of field names, not `true`/`["*"]`
   (both 400 with "Invalid value") — `["title", "url", "description"]` works.
 - Pagination: standard Elasticsearch `size`/`from` in the POST body. Only
@@ -60,17 +64,20 @@ import re
 
 import httpx
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 
 logger = logging.getLogger(__name__)
 
 SEARCH_URL = "https://www-api.ibm.com/search/api/v2"
 APP_ID = "careers"
 SCOPE = "careers2"
-CATEGORY_LABEL = "Software Engineering"
+CATEGORIES = {"Software Engineering", "Data & Analytics"}
 LOCATION_LABEL = "Canada"
 
-PAGE_SIZE = 20
+# Big enough for every Canadian posting in one page: the relevance sort
+# shifts between requests, so paging 20 at a time missed 8 of 62 jobs
+# (2026-11-02).
+PAGE_SIZE = 100
 MAX_PAGES = 50  # safety cap; this filter currently returns ~2 pages
 
 
@@ -89,11 +96,10 @@ def scrape() -> list[NormalizedJob]:
                     "scopes": [SCOPE],
                     "size": PAGE_SIZE,
                     "from": offset,
-                    "_source": ["title", "url", "description"],
+                    "_source": ["title", "url", "description", "field_keyword_08"],
                     "query": {
                         "bool": {
                             "must": [
-                                {"term": {"field_keyword_08": CATEGORY_LABEL}},
                                 {"term": {"field_keyword_05": LOCATION_LABEL}},
                             ]
                         }
@@ -119,7 +125,9 @@ def scrape() -> list[NormalizedJob]:
                 if job_id in seen_ids:
                     continue
                 seen_ids.add(job_id)
-                jobs.append(_normalize(job_id, hit["_source"]))
+                source = hit["_source"]
+                if source.get("field_keyword_08") in CATEGORIES or is_data_title(source["title"]):
+                    jobs.append(_normalize(job_id, source))
 
             offset += PAGE_SIZE
             if offset >= total:
@@ -143,7 +151,7 @@ def _normalize(job_id: str, raw: dict) -> NormalizedJob:
         "title": raw["title"],
         "url": raw["url"],
         "location": LOCATION_LABEL,
-        "category": CATEGORY_LABEL,
+        "category": raw.get("field_keyword_08") or "",
         "posted_date": None,
         "platform": "Avature",
     }

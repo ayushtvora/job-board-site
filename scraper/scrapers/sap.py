@@ -39,7 +39,7 @@ from datetime import datetime
 
 import httpx
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_data_title
 from .smartrecruiters import scrape_smartrecruiters
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,8 @@ def _scrape_successfactors() -> list[NormalizedJob]:
     jobs: list[NormalizedJob] = []
     for posting in postings:
         fields = {label.strip(): html.unescape(value.strip()) for label, value in FILTER_RE.findall(posting)}
-        if fields.get("Work Area") not in WORK_AREAS:
+        title = _tag(posting, "JobTitle")
+        if fields.get("Work Area") not in WORK_AREAS and not is_data_title(title):
             continue
         if fields.get("Country") != "Canada" and "Canada" not in fields.get("Additional Locations", ""):
             continue
@@ -92,10 +93,10 @@ def _scrape_successfactors() -> list[NormalizedJob]:
         jobs.append(
             {
                 "external_id": req_id,
-                "title": _tag(posting, "JobTitle"),
+                "title": title,
                 "url": JOB_URL.format(req_id),
                 "location": f"{city}, Canada" if city else "Canada",
-                "category": fields["Work Area"],
+                "category": fields.get("Work Area", ""),
                 "posted_date": _parse_date(_tag(posting, "Posted-Date")),
                 "platform": "SuccessFactors",
             }
