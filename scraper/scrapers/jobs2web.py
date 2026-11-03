@@ -33,6 +33,7 @@ by relevance, so paging stops at the first page without a data title).
 
 import logging
 import re
+import time
 from collections.abc import Callable
 from datetime import datetime
 from urllib.parse import urljoin
@@ -45,6 +46,8 @@ from .base import DATA_SEARCH_TERMS, NormalizedJob, is_data_title
 logger = logging.getLogger(__name__)
 
 PAGE_SIZE = 25
+# Waits before retrying a 403/429 (see _get).
+RATE_LIMIT_BACKOFF_SECONDS = (30, 60)
 MAX_PAGES = 50
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"}
 JOB_ID_RE = re.compile(r"/(\d+)/?$")
@@ -140,18 +143,32 @@ def scrape_jobs2web(
 
 
 def _get(client: httpx.Client, name: str, url: str, params: dict) -> httpx.Response:
-    """GET a page, retrying once if the server dropped the connection.
+    """GET a page, retrying if the server dropped the connection or briefly
+    refused us.
 
     EY failed twice on 2026-11-02 with "Server disconnected without sending
     a response", both times during a full parallel run (101s instead of the
     usual ~15s), while it worked every time on its own. httpx discards the
     dropped connection, so the retry opens a fresh one.
+
+    Bank of Canada and Hydro One both got a 403 on their first request in
+    the 6am run on 2026-11-03, within a second of each other and while
+    Celestica, City of Toronto and EY were also mid-scrape. Both answered
+    200 from the same IP afterwards. Jobs2Web sites share SAP's servers
+    behind their own domains (so host_limits can't group them), which makes
+    this look like a short rate limit on the burst, so a 403/429 is retried
+    after a wait before giving up.
     """
-    try:
-        response = client.get(url, params=params)
-    except httpx.RemoteProtocolError:
-        logger.warning("%s: server dropped the connection, retrying", name)
-        response = client.get(url, params=params)
+    for wait in (*RATE_LIMIT_BACKOFF_SECONDS, None):
+        try:
+            response = client.get(url, params=params)
+        except httpx.RemoteProtocolError:
+            logger.warning("%s: server dropped the connection, retrying", name)
+            response = client.get(url, params=params)
+        if response.status_code not in (403, 429) or wait is None:
+            break
+        logger.warning("%s: got HTTP %d, retrying in %ds", name, response.status_code, wait)
+        time.sleep(wait)
     response.raise_for_status()
     return response
 
