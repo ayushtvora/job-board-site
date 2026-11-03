@@ -40,6 +40,10 @@ services:
       WIREGUARD_PRESHARED_KEY: ${AIRVPN_WG_PRESHARED_KEY}
       WIREGUARD_ADDRESSES: ${AIRVPN_WG_ADDRESSES}
       SERVER_COUNTRIES: Canada
+      # GC Jobs (Government of Canada, NRC, StatCan) drops connections from
+      # AirVPN's Toronto exit 104.254.90.162, but both Montreal servers
+      # (Lacerta, Ross) get through (checked 2026-11-03).
+      SERVER_CITIES: Montreal
       # Lets the scraper reach db outside the tunnel.
       FIREWALL_OUTBOUND_SUBNETS: 172.16.0.0/12
       TZ: ${TZ}

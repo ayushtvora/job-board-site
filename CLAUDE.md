@@ -1562,7 +1562,10 @@ Things worth knowing across the batch:
   Postgres through db's published host port 5432 (keep that port
   published). VPN exit IPs get
   bot-blocked more often than a home IP, so if a scraper starts failing
-  only behind the VPN, that's the first thing to suspect.
+  only behind the VPN, that's the first thing to suspect. GC Jobs is one:
+  it drops connections from AirVPN's Toronto exit 104.254.90.162, so the
+  `vpn` service is pinned to `SERVER_CITIES: Montreal`, whose two servers
+  (Lacerta, Ross) both get through (2026-11-03).
 - Access control: **Cloudflare Access** sits in front of the deployed `web`
   service (via a Cloudflare Tunnel or equivalent), restricting access to my
   own identity. The Next.js app itself implements no auth — it trusts that
