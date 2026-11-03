@@ -95,7 +95,7 @@ CITY_PATTERNS = [
         ("Windsor", r"windsor" + _ON),
         ("Kingston", r"kingston" + _ON),
         ("Ottawa", r"ottawa|kanata|nepean"),
-        ("Montreal", r"montr[eé]al|saint-laurent|st\.? laurent"),
+        ("Montreal", r"montr[eé]al|saint-laurent|st\.? laurent|verdun"),
         ("Laval", r"\blaval\b"),
         ("Longueuil", r"longueuil"),
         ("Brossard", r"brossard"),
@@ -132,7 +132,8 @@ OTHER_CITY_PATTERN = re.compile(
     r"([A-Za-zÀ-ÿ.' -]{3,40}?)\s*(?:,|\()\s*"
     r"(?:(?-i:ON|BC|QC|AB|NS|MB|YT|NT|NU)|ontario|british columbia|qu[eé]bec|alberta|nova scotia|"
     r"manitoba|new brunswick|newfoundland|prince edward island|saskatchewan|yukon|"
-    r"northwest territories|nunavut)\b",
+    # Not the "Quebec" of "Quebec City".
+    r"northwest territories|nunavut)\b(?!\s+city)",
     re.IGNORECASE,
 )
 NOT_CITY_PATTERN = re.compile(
@@ -154,6 +155,9 @@ def job_cities(location: str) -> list[str]:
         # Keep only the last part of e.g. "AMER - Canada - Kamloops".
         name = re.split(r"\s+-\s+", match.group(1))[-1].strip(" .-")
         if NOT_CITY_PATTERN.search(name) or CANADA_PATTERN.fullmatch(name):
+            continue
+        # A street after its number ("8585 Cote-De-Liesse, QC").
+        if location[: match.start(1)].rstrip()[-1:].isdigit():
             continue
         if any(pattern.search(name) for _, pattern in CITY_PATTERNS):
             continue
