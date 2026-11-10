@@ -128,7 +128,13 @@ async function scoreNextJob(failures: Map<number, number>): Promise<"scored" | "
       id: { notIn: skip },
       OR: FIELDS.filter((field) => keys.has(field)).map((field) => ({
         field,
-        OR: [{ scoreKey: null }, { scoreKey: { not: keys.get(field) } }],
+        OR: [
+          { scoreKey: null },
+          { scoreKey: { not: keys.get(field) } },
+          // Scored from the title before the scraper found a description
+          // (e.g. jobs that existed before descriptions were scraped).
+          { scoreBasis: "title", description: { not: null } },
+        ],
       })),
       AND: {
         // Wait for the scraper's description pass, unless it gave up.

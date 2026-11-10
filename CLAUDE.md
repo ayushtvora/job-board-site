@@ -1461,7 +1461,8 @@ item, capped at 20k chars). It's filled in one of two ways:
   and again only when its `score_key` (hash of its field's resume, the
   model and `PROMPT_VERSION`) changes, so editing one resume re-scores
   only that field's jobs. It waits for the scraper's description pass
-  (description present, a failed attempt, or the job 12h old). On a 429
+  (description present, a failed attempt, or the job 12h old), and
+  re-scores a title-only score once a description turns up. On a 429
   it waits 5 minutes (that's also how a used-up daily free-tier quota
   looks), on a 5xx 1 minute; a job that fails 3 times otherwise is skipped
   until restart.
