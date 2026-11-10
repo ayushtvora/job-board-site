@@ -35,9 +35,9 @@ type ScoringStatus = {
   lastErrorAt: string | null;
 };
 
-// Column the table is sorted by, chosen by clicking a header. "default" is
-// the API's order (effective posted date, then company, then title).
-type SortKey = "default" | "score" | "posted";
+// Column the table is sorted by, chosen by clicking a header. It starts on
+// Score, highest first, which is the API's own order.
+type SortKey = "score" | "posted";
 type Sort = { key: SortKey; descending: boolean };
 
 type ScrapeStatus = {
@@ -99,7 +99,7 @@ export default function Home() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [scanRequest, setScanRequest] = useState<ScrapeRequest | null>(null);
   const [page, setPage] = useState(0);
-  const [sort, setSort] = useState<Sort>({ key: "default", descending: true });
+  const [sort, setSort] = useState<Sort>({ key: "score", descending: true });
   const [openJobId, setOpenJobId] = useState<number | null>(null);
   const [openJob, setOpenJob] = useState<JobDetail | null>(null);
   const [scoringStatus, setScoringStatus] = useState<ScoringStatus | null>(null);
@@ -477,9 +477,9 @@ export default function Home() {
 const COLUMN_COUNT = 9;
 
 // Unscored jobs always sort last, in either direction. Ties keep the
-// API's order (Array.prototype.sort is stable).
+// API's order (Array.prototype.sort is stable): the local priority
+// estimate (score_priority), then newest first.
 function sortJobs(jobs: Job[], sort: Sort): Job[] {
-  if (sort.key === "default") return sort.descending ? jobs : [...jobs].reverse();
   const sign = sort.descending ? -1 : 1;
   return [...jobs].sort((a, b) => {
     if (sort.key === "score") {

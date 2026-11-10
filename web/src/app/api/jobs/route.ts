@@ -3,6 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { effectivePostedDate, serializeJob } from "@/lib/serializeJob";
 import { Prisma } from "@/generated/prisma/client";
 
+function descendingNullsLast(a: number | null, b: number | null): number {
+  if (a === null || b === null) return (a === null ? 1 : 0) - (b === null ? 1 : 0);
+  return b - a;
+}
+
 function parseBoolParam(value: string | null): boolean | undefined {
   if (value === null) return undefined;
   return value === "true";
@@ -61,11 +66,18 @@ export async function GET(request: NextRequest) {
     omit: { description: true },
   });
 
-  // Sorted in JS rather than via Prisma's orderBy: the effective date (see
-  // effectivePostedDate) coalesces posted_date with first_seen_at, which
-  // isn't expressible as a plain column sort, and the row counts here are
-  // small enough that this costs nothing.
+  // Best match first: score, then the scoring queue's local estimate
+  // (score_priority, see src/lib/scoring/priority.ts) to break ties and to
+  // order jobs not scored yet, then newest first. Jobs without a score or
+  // priority go last. Sorted in JS rather than via Prisma's orderBy: the
+  // effective date (see effectivePostedDate) coalesces posted_date with
+  // first_seen_at, which isn't expressible as a plain column sort, and the
+  // row counts here are small enough that this costs nothing.
   jobs.sort((a, b) => {
+    const scoreDiff = descendingNullsLast(a.score, b.score);
+    if (scoreDiff !== 0) return scoreDiff;
+    const priorityDiff = descendingNullsLast(a.scorePriority, b.scorePriority);
+    if (priorityDiff !== 0) return priorityDiff;
     const dateDiff = effectivePostedDate(b).getTime() - effectivePostedDate(a).getTime();
     if (dateDiff !== 0) return dateDiff;
     const companyDiff = a.company.name.localeCompare(b.company.name);

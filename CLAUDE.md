@@ -156,7 +156,8 @@ The main table, in column order:
   under 50 weak), with `score_reason` on hover. "~" before it means it was
   scored from the title alone; "–" means not scored yet. Clicking the
   **Score** or **Posted Date** header sorts by it (again to flip the
-  direction; unscored jobs always last; back to page 1). A line above the
+  direction; unscored jobs always last; back to page 1). The table opens
+  sorted by Score, highest first (the default sort below). A line above the
   table shows "Scored X of Y jobs" and the scoring worker's last error.
 - Clicking a row (anywhere but its link or checkboxes) opens a panel under
   it with the score reason, matched and missing skills, and the
@@ -179,10 +180,14 @@ The main table, in column order:
   `posted_date` itself in the database is untouched by this; the fallback is
   applied only where the value is displayed/returned.
 
-Default sort: **effective** posted date descending (most recent first — using
-the same `posted_date` / `first_seen_at` fallback as the displayed column, so
-sort order always matches what's shown), then `company` ascending, then
-`job_title` ascending.
+Default sort (changed 2026-11-10): **`score` descending**, then
+`score_priority` descending (the scoring queue's local estimate, which
+breaks ties and orders jobs not scored yet), then **effective** posted date
+descending (most recent first — using the same `posted_date` /
+`first_seen_at` fallback as the displayed column), then `company`
+ascending, then `job_title` ascending. Jobs without a score, or a priority,
+come after those with one. The table starts with the Score header sorted
+▼; clicking Posted Date sorts by date instead.
 
 Default filter (applied automatically, no user action needed): show only rows
 where `is_active = true AND applied = false AND will_apply = true`. In other
