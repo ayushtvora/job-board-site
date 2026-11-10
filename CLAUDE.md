@@ -84,6 +84,10 @@ jobs
   score_key     text null        -- hash of resume + model + prompt version
                                   -- the score came from
   scored_at     timestamp null
+  score_priority float null      -- scoring queue order: a cheap local
+                                  -- estimate of the score, set by the
+                                  -- web app (src/lib/scoring/priority.ts)
+  priority_key  text null        -- resume + heuristic version it came from
 
   unique (company_id, external_id)
 
@@ -1460,7 +1464,8 @@ item, capped at 20k chars). It's filled in one of two ways:
 - `worker.ts`, started by `src/instrumentation.ts` when the server starts
   (only if a resume URL and the provider's key are set): scores one job at
   a time at `SCORING_RPM`/min, newest postings first, only jobs in the
-  default view (active, not applied, will apply). A job is scored once,
+  default view (active, not applied, will apply), in priority order (see
+  below). A job is scored once,
   and again only when its `score_key` (hash of its field's resume, the
   model and `PROMPT_VERSION`) changes, so editing one resume re-scores
   only that field's jobs. It waits for the scraper's description pass
@@ -1474,8 +1479,18 @@ item, capped at 20k chars). It's filled in one of two ways:
   resetting at midnight Pacific), shared by every use of the same key.
   The worker then shows "Daily quota ... is used up; scoring resumes
   around <time>" and sleeps until then. The first ~3,200-job backlog
-  takes about a week at that rate (newest postings first); after that, a
-  day's new postings fit easily.
+  takes about a week at that rate; after that, a day's new postings fit
+  easily (~85 new jobs a day, ~115 on weekdays, as of 2026-11-10).
+- **Queue order** (`priority.ts`, added 2026-11-10): before scoring, the
+  worker gives every job ready to score a `score_priority`, a cheap local
+  estimate of its score: a senior/lead/manager title counts against it, a
+  junior/intern/new-grad title for it, then fewer years of experience
+  required, resume skills mentioned in the description, and word overlap
+  with the resume. Jobs are scored highest priority first (then newest
+  first). On the first 328 Gemini scores (12 of them 70+), this ordering
+  put 11 of the 12 in its top 20%, against ~2 for a random order. The
+  weights were fitted on that small sample. Bump `PRIORITY_VERSION` after
+  changing the heuristic; a resume change recomputes it too.
 - Model: `SCORING_MODEL=<provider>:<model>`, `google` or `anthropic`
   (AI SDK provider registry, `model.ts`). Default
   `google:gemini-3.5-flash-lite`, on the Gemini API free tier (an AI

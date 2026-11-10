@@ -62,6 +62,11 @@ model Job {
   // job is re-scored when its field's current key differs.
   scoreKey      String?   @map("score_key")
   scoredAt      DateTime? @map("scored_at")
+  // Queue order for scoring: a cheap local estimate of the score (see
+  // src/lib/scoring/priority.ts), highest first. priorityKey is the resume
+  // and heuristic version it was computed with.
+  scorePriority Float?    @map("score_priority")
+  priorityKey   String?   @map("priority_key")
 
   company Company @relation(fields: [companyId], references: [slug])
 

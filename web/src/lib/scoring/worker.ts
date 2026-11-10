@@ -2,15 +2,15 @@ import { createHash } from "node:crypto";
 import { APICallError } from "ai";
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { effectivePostedDate } from "@/lib/serializeJob";
 import { scoringModelConfigured, scoringModelId } from "./model";
-import { type Field, FIELDS, loadResumes, resumeUrlsConfigured } from "./resume";
+import { buildPriorityModel, jobPriority, PRIORITY_VERSION, type PriorityModel } from "./priority";
+import { type Field, FIELDS, type LoadedResume, loadResumes, resumeUrlsConfigured } from "./resume";
 import { PROMPT_VERSION, scoreJob } from "./scoreJob";
 
 // Background scoring loop, started once per server by src/instrumentation.ts.
 // It scores one job at a time, at most SCORING_RPM per minute (the Gemini
-// free tier allows ~15/min on Flash-Lite), newest postings first, and
-// sleeps when there's nothing to do. Scores only ever change here: the
+// free tier allows ~15/min on Flash-Lite), the jobs most likely to score
+// high first (see priority.ts), and sleeps when there's nothing to do. Scores only ever change here: the
 // scraper never writes the score columns.
 
 const DEFAULT_RPM = 10;
@@ -30,6 +30,10 @@ const MAX_JOB_FAILURES = 3;
 // Jobs the scraper never fetches a description for (e.g. Meta and Uber)
 // are scored on their title once they're this old, rather than waiting.
 const DESCRIPTION_WAIT_MS = 12 * 60 * 60_000;
+// Jobs given a priority per transaction; the first run after deploying has ~3,200.
+const PRIORITY_BATCH = 500;
+// How long the word statistics behind the priority (priority.ts) are reused.
+const PRIORITY_MODEL_TTL_MS = 6 * 60 * 60_000;
 
 /**
  * The jobs whose score is shown in the default view, i.e. the ones worth
@@ -125,6 +129,16 @@ async function scoreNextJob(failures: Map<number, number>): Promise<"scored" | "
   const keys = scoreKeys(new Map([...resumes].map(([field, resume]) => [field, resume.hash])));
   if (keys.size === 0) return "idle";
 
+  // Wait for the scraper's description pass, unless it gave up.
+  const ready: Prisma.JobWhereInput = {
+    OR: [
+      { description: { not: null } },
+      { descriptionAttempts: { gt: 0 } },
+      { firstSeenAt: { lt: new Date(Date.now() - DESCRIPTION_WAIT_MS) } },
+    ],
+  };
+  await fillPriorities(resumes, ready);
+
   const skip = [...failures].filter(([, count]) => count >= MAX_JOB_FAILURES).map(([id]) => id);
   const where: Prisma.JobWhereInput = {
     ...IN_SCOPE,
@@ -139,43 +153,26 @@ async function scoreNextJob(failures: Map<number, number>): Promise<"scored" | "
         { scoreBasis: "title", description: { not: null } },
       ],
     })),
-    AND: {
-      // Wait for the scraper's description pass, unless it gave up.
-      OR: [
-        { description: { not: null } },
-        { descriptionAttempts: { gt: 0 } },
-        { firstSeenAt: { lt: new Date(Date.now() - DESCRIPTION_WAIT_MS) } },
-      ],
-    },
+    AND: ready,
   };
-  const select = {
-    id: true,
-    title: true,
-    location: true,
-    description: true,
-    field: true,
-    postedDate: true,
-    firstSeenAt: true,
-    company: { select: { name: true } },
-  } as const;
-  // Newest first by the date the table shows (posted_date, else
-  // first_seen_at; see effectivePostedDate). Prisma can't sort on that
-  // fallback, so take the newest dated and newest undated job and score
-  // whichever is newer.
-  const [dated, undated] = await Promise.all([
-    prisma.job.findFirst({
-      where: { ...where, postedDate: { not: null } },
-      orderBy: [{ postedDate: "desc" }, { firstSeenAt: "desc" }],
-      select,
-    }),
-    prisma.job.findFirst({ where: { ...where, postedDate: null }, orderBy: { firstSeenAt: "desc" }, select }),
-  ]);
-  const job =
-    dated && undated
-      ? effectivePostedDate(undated) > effectivePostedDate(dated)
-        ? undated
-        : dated
-      : (dated ?? undated);
+  // Most likely to score high first (priority.ts); a job not given a
+  // priority yet goes last, then newest posting first.
+  const job = await prisma.job.findFirst({
+    where,
+    orderBy: [
+      { scorePriority: { sort: "desc", nulls: "last" } },
+      { postedDate: { sort: "desc", nulls: "last" } },
+      { firstSeenAt: "desc" },
+    ],
+    select: {
+      id: true,
+      title: true,
+      location: true,
+      description: true,
+      field: true,
+      company: { select: { name: true } },
+    },
+  });
   if (!job) return "idle";
 
   const field = job.field as Field;
@@ -204,7 +201,73 @@ async function scoreNextJob(failures: Map<number, number>): Promise<"scored" | "
   return "scored";
 }
 
-export function describeError(err: unknown): { message: string; backOffMs?: number; jobId?: number } {
+export /**
+ * Each field's current priority key: a job whose priority_key differs was
+ * given its priority with an older resume or heuristic (or never).
+ */
+function priorityKeys(resumes: Map<Field, LoadedResume>): Map<Field, string> {
+  const keys = new Map<Field, string>();
+  for (const [field, resume] of resumes) {
+    keys.set(field, createHash("sha256").update(`${resume.hash}|p${PRIORITY_VERSION}`).digest("hex").slice(0, 16));
+  }
+  return keys;
+}
+
+let cachedModel: { model: PriorityModel; resumeHashes: string; builtAt: number } | null = null;
+
+/**
+ * The priority heuristic's word statistics, from every job in the default
+ * view, rebuilt when a resume changes or after PRIORITY_MODEL_TTL_MS.
+ */
+async function priorityModel(resumes: Map<Field, LoadedResume>): Promise<PriorityModel> {
+  const resumeHashes = [...resumes].map(([field, resume]) => `${field}:${resume.hash}`).join(",");
+  if (cachedModel && cachedModel.resumeHashes === resumeHashes && Date.now() - cachedModel.builtAt < PRIORITY_MODEL_TTL_MS) {
+    return cachedModel.model;
+  }
+  const corpus = await prisma.job.findMany({
+    where: { ...IN_SCOPE, description: { not: null } },
+    select: { description: true },
+  });
+  const model = buildPriorityModel(
+    new Map([...resumes].map(([field, resume]) => [field, resume.text])),
+    corpus.map((job) => job.description!),
+  );
+  cachedModel = { model, resumeHashes, builtAt: Date.now() };
+  return model;
+}
+
+/**
+ * Gives a priority to every job ready to score that doesn't have a current
+ * one, PRIORITY_BATCH per transaction. Only ready jobs, so the priority is
+ * computed from the description the job will be scored with.
+ */
+async function fillPriorities(resumes: Map<Field, LoadedResume>, ready: Prisma.JobWhereInput) {
+  const keys = priorityKeys(resumes);
+  for (;;) {
+    const pending = await prisma.job.findMany({
+      where: {
+        ...IN_SCOPE,
+        OR: [...keys].map(([field, key]) => ({ field, OR: [{ priorityKey: null }, { priorityKey: { not: key } }] })),
+        AND: ready,
+      },
+      select: { id: true, title: true, description: true, field: true },
+      take: PRIORITY_BATCH,
+    });
+    if (pending.length === 0) return;
+    const model = await priorityModel(resumes);
+    await prisma.$transaction(
+      pending.map((job) =>
+        prisma.job.update({
+          where: { id: job.id },
+          data: { scorePriority: jobPriority(model, job), priorityKey: keys.get(job.field as Field) },
+        }),
+      ),
+    );
+    if (pending.length < PRIORITY_BATCH) return;
+  }
+}
+
+function describeError(err: unknown): { message: string; backOffMs?: number; jobId?: number } {
   const jobId = err instanceof JobScoringError ? err.jobId : undefined;
   const cause = err instanceof JobScoringError ? err.cause : err;
   if (APICallError.isInstance(cause)) {
