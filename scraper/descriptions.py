@@ -162,7 +162,24 @@ def fetch_gcjobs(client: httpx.Client, url: str, match: re.Match) -> str | None:
     return None
 
 
+def fetch_tcs(client: httpx.Client, url: str, match: re.Match) -> str | None:
+    """TCS iBegin is an Angular app, so its job pages have no
+    server-rendered text; the description comes from its API, which 403s
+    without Origin/Referer (see scrapers/tcs.py)."""
+    base, locale, job_id = match.group("base", "locale", "id")
+    response = client.get(
+        f"{base}/api/{locale}/job/desc/{job_id}",
+        headers={"Accept": "application/json", "Origin": "https://ibegin.tcsapps.com", "Referer": url},
+    )
+    response.raise_for_status()
+    return clean_description((response.json().get("payload") or {}).get("description"))
+
+
 FETCHERS: list[tuple[re.Pattern, Callable[[httpx.Client, str, re.Match], str | None]]] = [
+    (
+        re.compile(r"(?P<base>https?://ibegin\.tcsapps\.com/candidate/next)/(?P<locale>[\w-]+)/jobs/(?P<id>\d+)J?"),
+        fetch_tcs,
+    ),
     (re.compile(r"https?://emploisfp-psjobs\.cfp-psc\.gc\.ca/"), fetch_gcjobs),
     (
         re.compile(

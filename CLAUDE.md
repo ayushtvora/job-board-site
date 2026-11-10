@@ -491,12 +491,12 @@ not host cron (per the architecture decision above).
       Management / Global Asset Management** (all on jobs.rbc.com), **TD
       Securities**, **BMO Capital Markets**, **Scotiabank Global Banking and
       Markets**, **EA SPORTS** (all on their parent's career site).
-  - **Symcor**, Canada / technology departments (Dayforce) — see "Symcor
-    and TCS" below.
+  - **Symcor**, Canada / technology departments (Dayforce), and **Tata
+    Consultancy Services**, Canada / Technology function (TCS's own iBegin
+    portal) — see "Symcor and TCS" below.
   - Investigated but **not scraper-ready**: **CGI**, **Ontario Public
     Service**, **Tesla**, **CN**, **Siemens** (see "Fifth wave scraping
-    approach" below), **Citadel** (see "Sixth wave scraping approach"),
-    and **Tata Consultancy Services** (see "Symcor and TCS").
+    approach" below), and **Citadel** (see "Sixth wave scraping approach").
 - More companies and filters will be added later; scraper architecture should
   make adding a new company a matter of adding a new scraper module + a
   `companies` row (with its `sectors`, or it shows up under "Other"), not
@@ -1321,7 +1321,7 @@ scraper. Each helper's docstring explains the API and the per-tenant hooks
 - `gcjobs.py` — the federal GC Jobs site (Government of Canada,
   Statistics Canada, NRC), filtered by hiring organization.
 - Still bespoke: the custom in-house sites (Amazon, Google, Apple, IBM,
-  Meta, Shopify, Uber, Optiver, KPMG US, Y Combinator, DEV IT), SAP
+  Meta, Shopify, Uber, Optiver, KPMG US, Y Combinator, DEV IT, TCS), SAP
   (SuccessFactors feed plus the SmartRecruiters helper), EA, National Bank
   and Two Sigma (Avature, but different page templates and date sources),
   Liberty Mutual and Netflix (Eightfold apply/v2), Deloitte (SuccessFactors'
@@ -1711,14 +1711,24 @@ Things worth knowing across the batch:
   name looks technical ("Architecture", "Development - Data"); "Product"
   and "Stationery Support Group" are left out. Descriptions come through
   `fetch_generic`'s Dayforce `"jobDescription"` path.
-- **Tata Consultancy Services — not scraper-ready.** `www.tcs.com` (and
-  `careers.tcs.com`, which redirects there) is a flat Akamai "Access
-  Denied" to plain HTTP and to headless Chromium alike, the same block
-  as Manulife. The old `ibegin.tcs.com` portal no longer resolves in DNS.
-  No backing ATS was found: TCS's Canadian postings only show up on
-  aggregators that don't expose an apply link, and the Greenhouse board
-  `tcs` belongs to Thornbury Community Services, an unrelated UK care
-  provider. Don't retry without a real TCS apply URL to work back from.
+- **Tata Consultancy Services** (`scrapers/tcs.py`): TCS's own iBegin
+  portal at `ibegin.tcsapps.com/candidate/next/` (the URL came from the
+  user). `www.tcs.com` and `careers.tcs.com` are a flat Akamai "Access
+  Denied" even to headless Chromium, and the old `ibegin.tcs.com` no
+  longer resolves, but tcsapps.com isn't behind that WAF. (The Greenhouse
+  board `tcs` is Thornbury Community Services, an unrelated UK care
+  provider.)
+  - `POST /api/en-CA/search/jobs` is a plain-httpx JSON API. It needs the
+    `XSRF-TOKEN` cookie echoed as a `next-xsrf-token` header, plus
+    `Origin`/`Referer` headers (without them every call 403s, including
+    the detail GET). Page sizes are 10, 25 or 50 only.
+  - The `en-CA` locale is the Canada filter: 161 postings on 2026-11-10,
+    all in the "TECHNOLOGY" domain (the site's Function filter).
+  - **No posted date** (only an apply-by deadline), so the date falls
+    back to first_seen_at.
+  - Descriptions come from `GET /api/en-CA/job/desc/<numeric id>`, via
+    `descriptions.py`'s `fetch_tcs`, because the job pages are a
+    client-rendered Angular app.
 
 ## Deployment
 
