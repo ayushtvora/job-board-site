@@ -491,9 +491,12 @@ not host cron (per the architecture decision above).
       Management / Global Asset Management** (all on jobs.rbc.com), **TD
       Securities**, **BMO Capital Markets**, **Scotiabank Global Banking and
       Markets**, **EA SPORTS** (all on their parent's career site).
+  - **Symcor**, Canada / technology departments (Dayforce) — see "Symcor
+    and TCS" below.
   - Investigated but **not scraper-ready**: **CGI**, **Ontario Public
     Service**, **Tesla**, **CN**, **Siemens** (see "Fifth wave scraping
-    approach" below), and **Citadel** (see "Sixth wave scraping approach").
+    approach" below), **Citadel** (see "Sixth wave scraping approach"),
+    and **Tata Consultancy Services** (see "Symcor and TCS").
 - More companies and filters will be added later; scraper architecture should
   make adding a new company a matter of adding a new scraper module + a
   `companies` row (with its `sectors`, or it shows up under "Other"), not
@@ -1463,9 +1466,16 @@ item, capped at 20k chars). It's filled in one of two ways:
   only that field's jobs. It waits for the scraper's description pass
   (description present, a failed attempt, or the job 12h old), and
   re-scores a title-only score once a description turns up. On a 429
-  it waits 5 minutes (that's also how a used-up daily free-tier quota
-  looks), on a 5xx 1 minute; a job that fails 3 times otherwise is skipped
-  until restart.
+  it waits until the time the error gives (Gemini's `retryDelay`, or a
+  `Retry-After` header), otherwise 5 minutes; on a 5xx 1 minute. A job that
+  fails 3 times otherwise is skipped until restart.
+- **Free-tier limit**: Gemini's free tier allows **500 requests per day
+  per model** (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`,
+  resetting at midnight Pacific), shared by every use of the same key.
+  The worker then shows "Daily quota ... is used up; scoring resumes
+  around <time>" and sleeps until then. The first ~3,200-job backlog
+  takes about a week at that rate (newest postings first); after that, a
+  day's new postings fit easily.
 - Model: `SCORING_MODEL=<provider>:<model>`, `google` or `anthropic`
   (AI SDK provider registry, `model.ts`). Default
   `google:gemini-3.5-flash-lite`, on the Gemini API free tier (an AI
@@ -1693,6 +1703,22 @@ Things worth knowing across the batch:
   `/page/N/` and query-string filters all stay on "Just a moment...". Only
   the first 10 postings are reachable, and the office filter lists no
   Canadian office anyway. Don't retry without new information.
+
+### Symcor and TCS (investigated 2026-11-10)
+
+- **Symcor** (`scrapers/symcor.py`): Dayforce namespace `symcor`, via
+  `dayforce.py`. 4 postings, all Mississauga. Scope is departments whose
+  name looks technical ("Architecture", "Development - Data"); "Product"
+  and "Stationery Support Group" are left out. Descriptions come through
+  `fetch_generic`'s Dayforce `"jobDescription"` path.
+- **Tata Consultancy Services — not scraper-ready.** `www.tcs.com` (and
+  `careers.tcs.com`, which redirects there) is a flat Akamai "Access
+  Denied" to plain HTTP and to headless Chromium alike, the same block
+  as Manulife. The old `ibegin.tcs.com` portal no longer resolves in DNS.
+  No backing ATS was found: TCS's Canadian postings only show up on
+  aggregators that don't expose an apply link, and the Greenhouse board
+  `tcs` belongs to Thornbury Community Services, an unrelated UK care
+  provider. Don't retry without a real TCS apply URL to work back from.
 
 ## Deployment
 

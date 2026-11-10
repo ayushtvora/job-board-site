@@ -145,6 +145,7 @@ from . import nasa
 from . import ycombinator
 from . import uber
 from . import amd
+from . import symcor
 
 # Adding a new company: write scrapers/<slug>.py exposing scrape() -> list[NormalizedJob],
 # add it here, and add a matching row to the companies table. Companies on a
@@ -297,4 +298,5 @@ SCRAPERS: dict[str, Callable[[], list[NormalizedJob]]] = {
     "ycombinator": ycombinator.scrape,
     "uber": uber.scrape,
     "amd": amd.scrape,
+    "symcor": symcor.scrape,
 }

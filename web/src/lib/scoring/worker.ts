@@ -17,6 +17,9 @@ const IDLE_MS = 60_000;
 // After a rate-limit (429) response. A free tier's daily quota shows up as
 // a 429 too, so this also paces a quota-exhausted worker until it resets.
 const RATE_LIMIT_BACKOFF_MS = 5 * 60_000;
+// When a 429 says when the quota resets (a free tier's daily quota does),
+// the worker sleeps until then, up to this long.
+const MAX_QUOTA_WAIT_MS = 24 * 60 * 60_000;
 // After a server error, e.g. Gemini's 503 "high demand", which is usually
 // gone within a minute, or a resume fetch or database error.
 const ERROR_BACKOFF_MS = 60_000;
@@ -183,11 +186,24 @@ async function scoreNextJob(failures: Map<number, number>): Promise<"scored" | "
   return "scored";
 }
 
-function describeError(err: unknown): { message: string; backOffMs?: number; jobId?: number } {
+export function describeError(err: unknown): { message: string; backOffMs?: number; jobId?: number } {
   const jobId = err instanceof JobScoringError ? err.jobId : undefined;
   const cause = err instanceof JobScoringError ? err.cause : err;
   if (APICallError.isInstance(cause)) {
     const status = cause.statusCode;
+    if (status === 429) {
+      const quota = quotaDetails(cause);
+      if (quota.retryMs && quota.retryMs > RATE_LIMIT_BACKOFF_MS) {
+        // A used-up daily quota: sleep until it resets instead of retrying
+        // every few minutes all night.
+        const resumesAt = new Date(Date.now() + quota.retryMs);
+        const limit = quota.limit ? ` (${quota.limit} requests)` : "";
+        return {
+          message: `Daily quota${limit} for ${scoringModelId()} is used up; scoring resumes around ${resumesAt.toLocaleString("en-CA", { timeZone: process.env.TZ || "America/Toronto", dateStyle: "medium", timeStyle: "short" })}`,
+          backOffMs: Math.min(quota.retryMs + 60_000, MAX_QUOTA_WAIT_MS),
+        };
+      }
+    }
     const backOffMs =
       status === 429 ? RATE_LIMIT_BACKOFF_MS : status !== undefined && status >= 500 ? ERROR_BACKOFF_MS : undefined;
     // Only the message: the error also carries the whole request, resume included.
@@ -206,6 +222,32 @@ function describeError(err: unknown): { message: string; backOffMs?: number; job
     backOffMs: jobId === undefined ? ERROR_BACKOFF_MS : undefined,
     jobId,
   };
+}
+
+/**
+ * How long a 429 says to wait, and the quota's size if it names one. Gemini
+ * puts both in the error body (RetryInfo.retryDelay "33834s", and
+ * QuotaFailure violations with a quotaValue, e.g. the free tier's 500
+ * requests per day per model); other providers send a Retry-After header.
+ */
+function quotaDetails(error: APICallError): { retryMs?: number; limit?: string } {
+  let retryMs: number | undefined;
+  let limit: string | undefined;
+  try {
+    const details = JSON.parse(error.responseBody ?? "{}")?.error?.details ?? [];
+    for (const detail of details) {
+      const delay = /^(\d+(?:\.\d+)?)s$/.exec(detail?.retryDelay ?? "");
+      if (delay) retryMs = Number(delay[1]) * 1000;
+      for (const violation of detail?.violations ?? []) {
+        if (violation?.quotaValue) limit = String(violation.quotaValue);
+      }
+    }
+  } catch {
+    // Not JSON; fall back to the header.
+  }
+  const header = Number(error.responseHeaders?.["retry-after"]);
+  if (retryMs === undefined && Number.isFinite(header) && header > 0) retryMs = header * 1000;
+  return { retryMs, limit };
 }
 
 async function recordError(message: string) {
