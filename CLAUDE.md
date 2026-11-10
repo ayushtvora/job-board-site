@@ -69,8 +69,34 @@ jobs
                                   -- "Remote", set by the scraper
                                   -- (base.job_cities); the UI's Location
                                   -- column and City filter
+  description   text null        -- plain text, set by the scraper (inline
+                                  -- or by scraper/descriptions.py); see
+                                  -- "Job descriptions and relevance score"
+  description_attempts int default 0 -- failed description fetches; the
+                                  -- scraper stops trying at 3
+  score         int null         -- 0-100 relevance to my resume, set by
+                                  -- the web app's scoring worker
+  score_reason  text null        -- one sentence from the model
+  matched_skills text[] default {} -- posting's skills my resume shows
+  missing_skills text[] default {} -- posting's skills my resume lacks
+  score_basis   text null        -- "description", or "title" when there
+                                  -- was no description
+  score_key     text null        -- hash of resume + model + prompt version
+                                  -- the score came from
+  scored_at     timestamp null
 
   unique (company_id, external_id)
+
+resumes                          -- the resume per jobs.field, written by
+  field         text PK          -- the scoring worker ("Software"/"Data")
+  text          text             -- plain text converted from the LaTeX
+  hash          text
+  fetched_at    timestamp
+
+scoring_state                    -- single row (id = 1)
+  id            int PK
+  last_error    text null        -- the scoring worker's last error, shown
+  last_error_at timestamp null   -- in the UI until a later score succeeds
 
 scrape_runs
   id            serial PK
@@ -83,8 +109,9 @@ scrape_runs
 
 Scraper behavior:
 - Upsert on `(company_id, external_id)`. Never overwrite `applied`,
-  `applied_at`, or `will_apply` on upsert — those are only ever changed by
-  the web app.
+  `applied_at`, `will_apply` or the `score*` / `*_skills` columns on
+  upsert — those are only ever changed by the web app. Conversely, the web
+  app never writes `description` or `description_attempts`.
 - On each scrape run, for jobs not seen this run (i.e. `last_seen_at` wasn't
   updated):
   - If `applied = true`, keep the row but set `is_active = false` — preserves
@@ -118,9 +145,18 @@ Scraper behavior:
 
 The main table, in column order:
 
-| Company | Job Title | Location | Job ID | Link | Posted Date | Applied | Will Apply |
-|---|---|---|---|---|---|---|---|
+| Score | Company | Job Title | Location | Job ID | Link | Posted Date | Applied | Will Apply |
+|---|---|---|---|---|---|---|---|---|
 
+- **Score** is `jobs.score`, coloured by band (70+ good, 50-69 stretch,
+  under 50 weak), with `score_reason` on hover. "~" before it means it was
+  scored from the title alone; "–" means not scored yet. Clicking the
+  **Score** or **Posted Date** header sorts by it (again to flip the
+  direction; unscored jobs always last; back to page 1). A line above the
+  table shows "Scored X of Y jobs" and the scoring worker's last error.
+- Clicking a row (anywhere but its link or checkboxes) opens a panel under
+  it with the score reason, matched and missing skills, and the
+  description, loaded from `GET /api/jobs/:id`.
 - **Location** shows `jobs.cities` (the first 3, then "+N more", with the
   raw `location` on hover), or the raw `location` when it names no city
   (e.g. just "Canada").
@@ -208,11 +244,20 @@ Both routes live in the Next.js app (`web`), backed by Prisma.
     "field": "Software",
     "postedDate": "2026-09-10",
     "applied": false,
-    "willApply": true
+    "willApply": true,
+    "score": 82,
+    "scoreReason": "Strong match on Java and SQL at a new-grad level.",
+    "scoreBasis": "description"
   }
   ```
   `postedDate` is always a date string, never `null` — see the posted date
-  fallback rule in the Default view section above.
+  fallback rule in the Default view section above. `score`, `scoreReason`
+  and `scoreBasis` are `null` until the job is scored. The description is
+  left out (it would multiply the response size).
+
+**`GET /api/jobs/:id`**
+- One job, same shape plus `description`, `matchedSkills` and
+  `missingSkills`, for the row detail panel. 404 if `id` doesn't exist.
 
 **`PATCH /api/jobs/:id`**
 - The *only* way `applied` and `will_apply` are ever modified — enforces the
@@ -247,6 +292,12 @@ Both routes live in the Next.js app (`web`), backed by Prisma.
   ```
 - Polled by the UI on page load (and optionally on an interval) rather than
   pushed — keeps web and scraper decoupled through Postgres only.
+
+**`GET /api/scoring-status`**
+- `{ "scored", "total", "lastError", "lastErrorAt" }`: how many of the
+  default view's jobs have a current score, and the scoring worker's last
+  error (null once a later score succeeds). Polled by the UI every minute;
+  the table reloads when `scored` changes.
 
 ## Scrape schedule
 
@@ -1352,6 +1403,79 @@ ON, CA, M5H 1H1", "AMER - Canada - Ontario - Toronto - University Ave"):
 - On 2026-11-03 this found a city for 92% of jobs. The rest are mostly
   "Canada"-only or non-Canadian locations.
 
+### Job descriptions and relevance score (added 2026-11-10)
+
+Each job gets a 0-100 relevance score against my resume, written by a
+background worker in the web app (Vercel AI SDK), from the job's
+description.
+
+**Descriptions (scraper).** `jobs.description` is plain text from
+`base.clean_description` (HTML stripped, one line per paragraph or list
+item, capped at 20k chars). It's filled in one of two ways:
+
+- **Inline**, where the listing response already has it: Workday CXS (the
+  detail call it already makes), Greenhouse (`content`), Ashby, Lever,
+  Jibe, Amazon, IBM (only a ~250-char teaser; the detail pages are behind
+  a WAF) and Xanadu (HiBob). `db.py` keeps a stored description when an
+  upsert sends none.
+- **`scraper/descriptions.py`**, after every run: each active job without
+  one is fetched **once** (failures retry on later runs, up to 3 attempts
+  in `description_attempts`), so the daily run only fetches new jobs. It
+  picks a fetcher by URL: Workday job links (the CXS detail, which also
+  covers the Phenom sites whose links go to Workday; their trailing
+  `/apply` is dropped), Oracle Recruiting (the
+  `recruitingCEJobRequisitionDetails` REST resource), Apple (the page's
+  hydration blob), GC Jobs (most postings only link out to the hiring
+  organization's own site, which is followed); everything else goes to
+  `fetch_generic`: schema.org JobPosting JSON-LD, then a Phenom
+  `phApp.ddo` job blob (Bell, OpenText), then an embedded
+  `"jobDescription"` JSON string (Dayforce), then the page's main
+  description element. Meta and Uber are skipped (they need a browser),
+  and TransLink's PeopleSoft links don't open a posting, so those are
+  scored on their title.
+- This pass never fails a run or writes `scrape_runs`. First full pass on
+  2026-11-10: ~1,800 jobs in 4 minutes; with the inline ones, 90%+ of jobs
+  had a description.
+- `python main.py --once --company <slug>` (repeatable) scrapes just those
+  companies, then runs the description pass.
+
+**Scoring (web, `src/lib/scoring/`).**
+
+- Two resumes: each job is scored against the one for its `field`
+  (`RESUME_URL_SOFTWARE` / `RESUME_URL_DATA`, raw URLs of the `.tex` files
+  in the public `ayushtvora/ayush-vora-resume` repo). `resume.ts` fetches
+  them at most hourly into `resumes`, converting LaTeX to plain text and
+  dropping the contact header (it doesn't help scoring and needn't go out
+  with every request).
+- `scoreJob.ts`: one structured-output call per job returning score,
+  one-sentence reason, and up to 8 matched / missing skills. The prompt is
+  a rubric with fixed anchors (90+ strong, 70s good, 50s stretch, under 30
+  wrong field or level), weighing seniority first, then required skills,
+  then domain. Jobs without a description are scored from the title and
+  marked `score_basis = "title"`. Bump `PROMPT_VERSION` after changing the
+  prompt, so every job is re-scored.
+- `worker.ts`, started by `src/instrumentation.ts` when the server starts
+  (only if a resume URL and the provider's key are set): scores one job at
+  a time at `SCORING_RPM`/min, newest postings first, only jobs in the
+  default view (active, not applied, will apply). A job is scored once,
+  and again only when its `score_key` (hash of its field's resume, the
+  model and `PROMPT_VERSION`) changes, so editing one resume re-scores
+  only that field's jobs. It waits for the scraper's description pass
+  (description present, a failed attempt, or the job 12h old). On a 429
+  it waits 5 minutes (that's also how a used-up daily free-tier quota
+  looks), on a 5xx 1 minute; a job that fails 3 times otherwise is skipped
+  until restart.
+- Model: `SCORING_MODEL=<provider>:<model>`, `google` or `anthropic`
+  (AI SDK provider registry, `model.ts`). Default
+  `google:gemini-3.5-flash-lite`, on the Gemini API free tier (an AI
+  Studio key; a Google One or Claude Pro subscription doesn't cover API
+  calls). Checked 2026-11-10: about 1s per job, and calibrated sensibly on
+  a sample (intern 95, new grad 82, senior 35, principal 10).
+  `gemini-2.5-flash-lite` is no longer offered to new keys, and
+  `gemini-3.8-flash` was returning 503 "high demand". For paid,
+  `anthropic:claude-haiku-5-5` with `ANTHROPIC_API_KEY` costs roughly
+  $0.0005 per job.
+
 ### Fourth wave, batches 2–6 scraping approach (investigated 2026-09-25)
 
 Company-specific findings. Each module's docstring has the full detail.
@@ -1638,6 +1762,10 @@ Things worth knowing across the batch:
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | db | Initializes the Postgres container; `DATABASE_URL` is built from these. |
 | `TZ` | scraper | Explicit timezone (e.g. `America/Toronto`) so the 6am schedule means local time, not UTC. |
 | `NODE_ENV` | web | `development` locally, `production` on the server. |
+| `RESUME_URL_SOFTWARE` / `RESUME_URL_DATA` | web | Raw URLs of the resumes Software / Data jobs are scored against (the `.tex` files in `ayushtvora/ayush-vora-resume`). Scoring is off when neither is set. |
+| `SCORING_MODEL` | web | `<provider>:<model>` for scoring, `google` or `anthropic`; default `google:gemini-3.5-flash-lite`. |
+| `SCORING_RPM` | web | Scoring requests per minute (default 10, under the Gemini free tier's limit). |
+| `GOOGLE_GENERATIVE_AI_API_KEY` / `ANTHROPIC_API_KEY` | web | API key for the `SCORING_MODEL` provider. |
 | `AIRVPN_WG_PRIVATE_KEY` / `AIRVPN_WG_PRESHARED_KEY` / `AIRVPN_WG_ADDRESSES` | vpn | WireGuard `PrivateKey`, `PresharedKey` and `Address` (IPv4 only) from an AirVPN Config Generator file for this project's own AirVPN device. |
 
 - Local values go in a gitignored `.env.local` (or `.env` used only by

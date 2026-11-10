@@ -25,6 +25,7 @@ config + its own investigation notes:
   detail page). `searchText` also matches descriptions, but results are
   sorted by relevance with title matches first, so paging stops at the
   first page with no data title.
+- The description is the detail's `jobDescription` (HTML).
 - Postings without an `externalPath` are skipped. CIBC's list response
   has been seen to include a stub posting with only `bulletFields`
   (confirmed 2026-09-25), which has no detail endpoint to fetch.
@@ -36,7 +37,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
-from .base import CANADA_PATTERN, DATA_SEARCH_TERMS, NormalizedJob, is_data_title
+from .base import CANADA_PATTERN, DATA_SEARCH_TERMS, NormalizedJob, clean_description, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +129,8 @@ def scrape_workday(
                     jobs.append(_normalize(raw, detail, category))
 
                 offset += PAGE_SIZE
-                if offset >= total or (data_only and not any(is_data_title(raw["title"]) for raw in postings)):
+                # .get: stub postings (see the docstring) can lack a title too.
+                if offset >= total or (data_only and not any(is_data_title(raw.get("title", "")) for raw in postings)):
                     break
             else:
                 logger.warning("%s scrape hit max_pages=%d without finishing — got %d jobs", name, max_pages, len(jobs))
@@ -157,6 +159,7 @@ def _normalize(raw: dict, detail: dict, category: str) -> NormalizedJob:
         "category": category,
         "posted_date": detail.get("startDate"),
         "platform": "Workday",
+        "description": clean_description(detail.get("jobDescription")),
     }
 
 

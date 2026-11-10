@@ -32,7 +32,8 @@ def record_scrape_run(
 def upsert_jobs_and_cleanup(conn: psycopg.Connection, company_slug: str, jobs: list[NormalizedJob]) -> None:
     """Upsert every job seen this run, then reconcile rows that weren't seen:
     keep-but-deactivate if applied, delete otherwise. Never touches applied,
-    applied_at, or will_apply — those are only ever changed by the web app.
+    applied_at, will_apply or the score columns — those are only ever
+    changed by the web app.
     """
     seen_ids = [job["external_id"] for job in jobs]
 
@@ -42,10 +43,11 @@ def upsert_jobs_and_cleanup(conn: psycopg.Connection, company_slug: str, jobs: l
                 """
                 INSERT INTO jobs (
                     company_id, external_id, title, url, location, category,
-                    posted_date, platform, field, cities, first_seen_at, last_seen_at, is_active
+                    posted_date, platform, field, cities, description, first_seen_at, last_seen_at, is_active
                 )
                 VALUES (%(company_id)s, %(external_id)s, %(title)s, %(url)s, %(location)s,
-                        %(category)s, %(posted_date)s, %(platform)s, %(field)s, %(cities)s, now(), now(), true)
+                        %(category)s, %(posted_date)s, %(platform)s, %(field)s, %(cities)s, %(description)s,
+                        now(), now(), true)
                 ON CONFLICT (company_id, external_id) DO UPDATE SET
                     title = EXCLUDED.title,
                     url = EXCLUDED.url,
@@ -55,6 +57,9 @@ def upsert_jobs_and_cleanup(conn: psycopg.Connection, company_slug: str, jobs: l
                     platform = EXCLUDED.platform,
                     field = EXCLUDED.field,
                     cities = EXCLUDED.cities,
+                    -- Most scrapers don't send a description (descriptions.py
+                    -- fetches it once instead), so never null out a stored one.
+                    description = COALESCE(EXCLUDED.description, jobs.description),
                     last_seen_at = now(),
                     is_active = true
                 """,
@@ -63,6 +68,7 @@ def upsert_jobs_and_cleanup(conn: psycopg.Connection, company_slug: str, jobs: l
                     **job,
                     "field": job_field(job["title"]),
                     "cities": job_cities(job["location"]),
+                    "description": job.get("description"),
                 },
             )
 

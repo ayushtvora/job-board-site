@@ -1,9 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { serializeJob } from "@/lib/serializeJob";
+import { serializeJob, serializeJobDetail } from "@/lib/serializeJob";
 import type { Prisma } from "@/generated/prisma/client";
 
 const ALLOWED_FIELDS = new Set(["applied", "willApply"]);
+
+// One job with its description and matched/missing skills, for the
+// table's detail panel.
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id: idParam } = await params;
+  const id = Number(idParam);
+  if (!Number.isInteger(id)) {
+    return NextResponse.json({ error: "Invalid job id" }, { status: 400 });
+  }
+  const job = await prisma.job.findUnique({ where: { id }, include: { company: true } });
+  if (!job) {
+    return NextResponse.json({ error: "Job not found" }, { status: 404 });
+  }
+  return NextResponse.json(serializeJobDetail(job));
+}
 
 export async function PATCH(
   request: NextRequest,
@@ -69,6 +87,7 @@ export async function PATCH(
     where: { id },
     data,
     include: { company: true },
+    omit: { description: true },
   });
 
   return NextResponse.json(serializeJob(updated));

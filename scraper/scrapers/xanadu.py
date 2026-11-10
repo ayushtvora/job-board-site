@@ -22,7 +22,7 @@ import re
 
 import httpx
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, clean_description, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -62,4 +62,8 @@ def _normalize(ad: dict) -> NormalizedJob:
         "category": ad.get("department") or "",
         "posted_date": published[:10] if published else None,
         "platform": "HiBob",
+        # The list response has the whole posting, in three HTML fields.
+        "description": clean_description(
+            "".join(ad.get(key) or "" for key in ("description", "responsibilities", "requirements"))
+        ),
     }

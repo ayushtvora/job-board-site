@@ -11,7 +11,8 @@ exists but hasn't been needed).
   title are kept whatever their department.
 - Per posting: `id` (stable UUID, used as `external_id`), `text` (title),
   `categories.{department,team,location}`, `hostedUrl`, and `createdAt`
-  (epoch milliseconds — a real posted date).
+  (epoch milliseconds — a real posted date). The description is
+  `description` + `lists[]` + `additional` (HTML).
 """
 
 import logging
@@ -20,7 +21,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, clean_description, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -58,4 +59,15 @@ def _normalize(raw: dict) -> NormalizedJob:
         "category": categories.get("department") or "",
         "posted_date": datetime.fromtimestamp(created_at / 1000, tz=timezone.utc).strftime("%Y-%m-%d") if created_at else None,
         "platform": "Lever",
+        "description": clean_description(_description_html(raw)),
     }
+
+
+def _description_html(raw: dict) -> str:
+    """The posting's intro, then each `lists[]` section ("What You'll Do",
+    ...) under its heading, then `additional` (all HTML)."""
+    parts = [raw.get("description") or ""]
+    for section in raw.get("lists") or []:
+        parts.append(f"<h3>{section.get('text') or ''}</h3><ul>{section.get('content') or ''}</ul>")
+    parts.append(raw.get("additional") or "")
+    return "".join(parts)

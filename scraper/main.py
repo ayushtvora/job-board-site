@@ -16,12 +16,18 @@ def main() -> None:
     parser.add_argument(
         "--once", action="store_true", help="Run all configured scrapers once immediately, then exit"
     )
+    parser.add_argument(
+        "--company",
+        action="append",
+        metavar="SLUG",
+        help="With --once, scrape only this company (repeatable), plus the description pass",
+    )
     args = parser.parse_args()
 
     from runner import run_all_scrapers, run_pending_scrape_request
 
     if args.once:
-        run_all_scrapers()
+        run_all_scrapers(args.company)
         return
 
     from apscheduler.schedulers.blocking import BlockingScheduler

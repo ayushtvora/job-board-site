@@ -13,7 +13,9 @@ Jibe front-ends (job URLs like `/jobs/<reqId>?lang=en-us`, apply links to
 - `category` is a list with stray leading spaces (`[" Engineering"]`),
   stripped by `categories()`.
 - Fields: `req_id` (stable iCIMS requisition ID, external_id), `title`,
-  `full_location`, `country_code`, `posted_date` (ISO datetime), `slug`.
+  `full_location`, `country_code`, `posted_date` (ISO datetime), `slug`,
+  `description` (HTML; `responsibilities`/`qualifications` repeat parts
+  of it, so they're only a fallback).
 - `platform` = "iCIMS" (`ats_code` on every job).
 """
 
@@ -22,7 +24,7 @@ from collections.abc import Callable
 
 import httpx
 
-from .base import NormalizedJob
+from .base import NormalizedJob, clean_description
 
 logger = logging.getLogger(__name__)
 
@@ -78,4 +80,7 @@ def _normalize(raw: dict, base_url: str, job_path: str) -> NormalizedJob:
         "category": ", ".join(categories(raw)),
         "posted_date": posted[:10] if posted else None,
         "platform": "iCIMS",
+        "description": clean_description(
+            raw.get("description") or (raw.get("responsibilities") or "") + (raw.get("qualifications") or "")
+        ),
     }

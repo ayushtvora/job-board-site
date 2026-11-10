@@ -1,6 +1,9 @@
+import html
 import re
 import threading
-from typing import TypedDict
+from typing import NotRequired, TypedDict
+
+from bs4 import BeautifulSoup
 
 # Matches a Canadian place in a free-text location string, covering every
 # province and territory (not just the big tech hubs). Province codes are
@@ -178,6 +181,38 @@ class NormalizedJob(TypedDict):
     category: str
     posted_date: str | None  # "YYYY-MM-DD", or None if the source doesn't expose one
     platform: str
+    # Plain text (see clean_description). Only set by scrapers whose listing
+    # response already includes it; for the rest, descriptions.py fetches it
+    # once after the job is saved.
+    description: NotRequired[str | None]
+
+
+# Long enough for any real posting; the cap only stops a mis-parsed page
+# (a whole site's text) from landing in the database and the scoring prompt.
+MAX_DESCRIPTION_CHARS = 20_000
+_BLOCK_TAGS = ("p", "div", "li", "br", "h1", "h2", "h3", "h4", "h5", "h6", "tr", "ul", "ol", "section")
+
+
+def clean_description(raw: str | None) -> str | None:
+    """A job description (HTML or text, possibly HTML-escaped as Greenhouse
+    sends it) as plain text: one line per paragraph or list item, list
+    items prefixed with "- ". None when there's no real text."""
+    if not raw:
+        return None
+    text = html.unescape(raw) if "&lt;" in raw else raw
+    soup = BeautifulSoup(text, "html.parser")
+    for tag in soup(["script", "style", "noscript"]):
+        tag.decompose()
+    for li in soup.find_all("li"):
+        li.insert_before("\n- ")
+    for tag in soup.find_all(_BLOCK_TAGS):
+        tag.insert_after("\n")
+    lines = (re.sub(r"[ \t ]+", " ", line).strip() for line in soup.get_text().splitlines())
+    cleaned = "\n".join(line for line in lines if line and line != "-")
+    cleaned = re.sub(r"\n- \n", "\n- ", cleaned)
+    if len(cleaned) < 50:
+        return None
+    return cleaned[:MAX_DESCRIPTION_CHARS]
 
 
 # Held by the scrapers that drive a Playwright browser (Meta, Uber) for the

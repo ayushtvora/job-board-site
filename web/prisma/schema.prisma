@@ -44,6 +44,25 @@ model Job {
   // job_cities in scraper/scrapers/base.py) for the UI's City filter.
   cities        String[]  @default([])
 
+  // Plain-text job description, fetched once by the scraper when the job
+  // is first seen (see scraper/descriptions.py). The scraper gives up after
+  // 3 failed attempts, and the job is then scored on its title alone.
+  description         String?
+  descriptionAttempts Int     @default(0) @map("description_attempts")
+
+  // AI relevance score (0-100) against the resume for this job's `field`;
+  // only ever written by the web app's scoring worker (src/lib/scoring).
+  score         Int?
+  scoreReason   String?   @map("score_reason")
+  matchedSkills String[]  @default([]) @map("matched_skills")
+  missingSkills String[]  @default([]) @map("missing_skills")
+  // "description", or "title" when no description was available.
+  scoreBasis    String?   @map("score_basis")
+  // Hash of the resume, model and prompt version the score came from; a
+  // job is re-scored when its field's current key differs.
+  scoreKey      String?   @map("score_key")
+  scoredAt      DateTime? @map("scored_at")
+
   company Company @relation(fields: [companyId], references: [slug])
 
   @@unique([companyId, externalId])
@@ -76,4 +95,25 @@ model ScrapeRequest {
   errorMessage String?   @map("error_message")
 
   @@map("scrape_requests")
+}
+
+// The resume each job is scored against, one per jobs.field ("Software" /
+// "Data"), fetched from RESUME_URL_SOFTWARE / RESUME_URL_DATA by the scoring
+// worker.
+model Resume {
+  field     String   @id
+  text      String
+  hash      String
+  fetchedAt DateTime @map("fetched_at")
+
+  @@map("resumes")
+}
+
+// Single row (id = 1) holding the scoring worker's last error.
+model ScoringState {
+  id          Int       @id
+  lastError   String?   @map("last_error")
+  lastErrorAt DateTime? @map("last_error_at")
+
+  @@map("scoring_state")
 }

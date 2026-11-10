@@ -9,7 +9,11 @@ export function effectivePostedDate(job: Pick<Job, "postedDate" | "firstSeenAt">
   return job.postedDate ?? job.firstSeenAt;
 }
 
-export function serializeJob(job: Job & { company: Company }) {
+// The job list leaves out `description` (it would multiply the response
+// size); GET /api/jobs/:id returns it, via serializeJobDetail.
+type ListedJob = Omit<Job, "description"> & { company: Company };
+
+export function serializeJob(job: ListedJob) {
   return {
     id: job.id,
     company: job.company.name,
@@ -23,5 +27,17 @@ export function serializeJob(job: Job & { company: Company }) {
     postedDate: effectivePostedDate(job).toISOString().slice(0, 10),
     applied: job.applied,
     willApply: job.willApply,
+    score: job.score,
+    scoreReason: job.scoreReason,
+    scoreBasis: job.scoreBasis,
+  };
+}
+
+export function serializeJobDetail(job: Job & { company: Company }) {
+  return {
+    ...serializeJob(job),
+    description: job.description,
+    matchedSkills: job.matchedSkills,
+    missingSkills: job.missingSkills,
   };
 }

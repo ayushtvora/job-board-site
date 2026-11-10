@@ -56,6 +56,9 @@ export async function GET(request: NextRequest) {
   const jobs = await prisma.job.findMany({
     where,
     include: { company: true },
+    // Descriptions are only for scoring and the detail panel
+    // (GET /api/jobs/:id); the table loads every job at once.
+    omit: { description: true },
   });
 
   // Sorted in JS rather than via Prisma's orderBy: the effective date (see

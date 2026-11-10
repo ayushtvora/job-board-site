@@ -64,7 +64,7 @@ import re
 
 import httpx
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, clean_description, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -154,4 +154,5 @@ def _normalize(job_id: str, raw: dict) -> NormalizedJob:
         "category": raw.get("field_keyword_08") or "",
         "posted_date": None,
         "platform": "Avature",
+        "description": clean_description(raw.get("description")),
     }

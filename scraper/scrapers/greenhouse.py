@@ -32,7 +32,7 @@ from collections.abc import Callable
 
 import httpx
 
-from .base import CANADA_PATTERN, NormalizedJob, is_data_title
+from .base import CANADA_PATTERN, NormalizedJob, clean_description, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -143,4 +143,5 @@ def _normalize(raw: dict, category_fn: Callable[[dict], str] | None) -> Normaliz
         "category": category_fn(raw) if category_fn else department_names(raw),
         "posted_date": posted_date[:10] if posted_date else None,
         "platform": "Greenhouse",
+        "description": clean_description(raw.get("content")),
     }

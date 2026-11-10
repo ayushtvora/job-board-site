@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import host_limits
+from descriptions import fetch_missing_descriptions
 from db import (
     claim_pending_scrape_request,
     finish_scrape_request,
@@ -32,14 +33,30 @@ class ScrapeResult:
     error: str | None
 
 
-def run_all_scrapers() -> None:
+def run_all_scrapers(only: list[str] | None = None) -> None:
+    """Scrape every company (or just the slugs in `only`), then fetch the
+    descriptions of jobs saved without one."""
+    scrapers = SCRAPERS
+    if only:
+        unknown = set(only) - set(SCRAPERS)
+        if unknown:
+            raise ValueError(f"Unknown company slug(s): {', '.join(sorted(unknown))}")
+        scrapers = {slug: SCRAPERS[slug] for slug in only}
+
     conn = get_connection()
     try:
         # Only the scraping runs in parallel. Results are written here, one
         # company at a time, so the connection is never shared between
         # threads.
-        for result in scrape_companies(SCRAPERS):
+        for result in scrape_companies(scrapers):
             _save_result(conn, result)
+        # Descriptions are only for the web app's scoring, so a failure here
+        # is logged, not recorded as a failed scrape.
+        try:
+            fetch_missing_descriptions(conn)
+        except Exception:
+            logger.exception("Fetching job descriptions failed")
+            conn.rollback()
     finally:
         conn.close()
 

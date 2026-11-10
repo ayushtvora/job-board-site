@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import FilterSelect from "./FilterSelect";
 import styles from "./page.module.css";
 
@@ -17,7 +17,28 @@ type Job = {
   postedDate: string;
   applied: boolean;
   willApply: boolean;
+  score: number | null;
+  scoreReason: string | null;
+  scoreBasis: "description" | "title" | null;
 };
+
+type JobDetail = Job & {
+  description: string | null;
+  matchedSkills: string[];
+  missingSkills: string[];
+};
+
+type ScoringStatus = {
+  scored: number;
+  total: number;
+  lastError: string | null;
+  lastErrorAt: string | null;
+};
+
+// Column the table is sorted by, chosen by clicking a header. "default" is
+// the API's order (effective posted date, then company, then title).
+type SortKey = "default" | "score" | "posted";
+type Sort = { key: SortKey; descending: boolean };
 
 type ScrapeStatus = {
   company: string;
@@ -45,6 +66,7 @@ const SCAN_POLL_INTERVAL_MS = 3000;
 // collapsed into "+N more", with the full list on hover.
 const MAX_CITIES_SHOWN = 3;
 const PAGE_SIZE = 50;
+const SCORING_POLL_INTERVAL_MS = 60_000;
 
 // Values are days, sent as the API's postedWithin param; "" means any date.
 const POSTED_WITHIN_OPTIONS = [
@@ -77,6 +99,10 @@ export default function Home() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [scanRequest, setScanRequest] = useState<ScrapeRequest | null>(null);
   const [page, setPage] = useState(0);
+  const [sort, setSort] = useState<Sort>({ key: "default", descending: true });
+  const [openJobId, setOpenJobId] = useState<number | null>(null);
+  const [openJob, setOpenJob] = useState<JobDetail | null>(null);
+  const [scoringStatus, setScoringStatus] = useState<ScoringStatus | null>(null);
   const scanInFlight = scanRequest?.status === "pending" || scanRequest?.status === "running";
 
   const loadJobs = useCallback(async () => {
@@ -108,6 +134,23 @@ export default function Home() {
   useEffect(() => {
     loadScrapeStatus();
   }, [loadScrapeStatus]);
+
+  // Scores arrive in the background, so the progress line refreshes on an
+  // interval, and the table too whenever more jobs have been scored.
+  const lastScored = useRef<number | null>(null);
+  useEffect(() => {
+    const poll = () =>
+      fetch("/api/scoring-status")
+        .then((res) => res.json())
+        .then((data: ScoringStatus) => {
+          if (lastScored.current !== null && lastScored.current !== data.scored) loadJobs();
+          lastScored.current = data.scored;
+          setScoringStatus(data);
+        });
+    poll();
+    const interval = setInterval(poll, SCORING_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [loadJobs]);
 
   useEffect(() => {
     fetch("/api/companies")
@@ -153,9 +196,38 @@ export default function Home() {
 
   // Re-fetching after a checkbox edit can shrink the list, so the page is
   // clamped rather than trusted.
-  const pageCount = Math.max(1, Math.ceil(jobs.length / PAGE_SIZE));
+  const sortedJobs = sortJobs(jobs, sort);
+  const pageCount = Math.max(1, Math.ceil(sortedJobs.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
-  const pageJobs = jobs.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const pageJobs = sortedJobs.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
+  // Clicking a sortable header sorts by it, highest/newest first; clicking
+  // it again flips the direction. Back to page 1 either way.
+  function sortBy(key: SortKey) {
+    setSort((prev) => (prev.key === key ? { key, descending: !prev.descending } : { key, descending: true }));
+    setPage(0);
+  }
+
+  async function toggleDetails(id: number) {
+    if (openJobId === id) {
+      setOpenJobId(null);
+      return;
+    }
+    setOpenJobId(id);
+    setOpenJob(null);
+    const res = await fetch(`/api/jobs/${id}`);
+    if (res.ok) {
+      const data: JobDetail = await res.json();
+      setOpenJob(data);
+    }
+  }
+
+  // A click anywhere on a row opens its details, except on the link and
+  // checkboxes, which keep doing their own thing.
+  function onRowClick(event: React.MouseEvent, id: number) {
+    if ((event.target as HTMLElement).closest("a, input, button, label")) return;
+    toggleDetails(id);
+  }
 
   // Wraps a filter's setter so changing the filter goes back to page 1.
   function resettingPage<T>(set: (value: T) => void) {
@@ -254,6 +326,21 @@ export default function Home() {
           )}
         </div>
 
+        {scoringStatus && scoringStatus.total > 0 && (
+          <div className={styles.scoringStatus}>
+            <span>
+              Scored {scoringStatus.scored.toLocaleString()} of {scoringStatus.total.toLocaleString()} jobs
+            </span>
+            {scoringStatus.lastError && (
+              <span className={styles.scanError} title={scoringStatus.lastError}>
+                Scoring error
+                {scoringStatus.lastErrorAt ? ` (${new Date(scoringStatus.lastErrorAt).toLocaleString()})` : ""}:{" "}
+                {scoringStatus.lastError.slice(0, 160)}
+              </span>
+            )}
+          </div>
+        )}
+
         <div className={styles.filters}>
           <FilterSelect label="Field" value={field} options={FIELD_OPTIONS} onChange={resettingPage(setField)} />
           <FilterSelect
@@ -308,23 +395,29 @@ export default function Home() {
           <p>No jobs to show.</p>
         ) : (
           <>
-            {renderPager(jobs.length, currentPage, pageCount, setPage)}
+            {renderPager(sortedJobs.length, currentPage, pageCount, setPage)}
             <table className={styles.table}>
               <thead>
                 <tr>
+                  {renderSortHeader("Score", "score", sort, sortBy)}
                   <th>Company</th>
                   <th>Job Title</th>
                   <th>Location</th>
                   <th>Job ID</th>
                   <th>Link</th>
-                  <th>Posted Date</th>
+                  {renderSortHeader("Posted Date", "posted", sort, sortBy)}
                   <th>Applied</th>
                   <th>Will Apply</th>
                 </tr>
               </thead>
               <tbody>
                 {pageJobs.map((job) => (
-                  <tr key={job.id}>
+                  <Fragment key={job.id}>
+                  <tr
+                    className={`${styles.jobRow} ${openJobId === job.id ? styles.openRow : ""}`}
+                    onClick={(e) => onRowClick(e, job.id)}
+                  >
+                    <td className={styles.scoreCell}>{renderScore(job)}</td>
                     <td className={styles.company}>{job.company}</td>
                     <td>
                       <span className={styles.clamp} title={job.title}>
@@ -361,16 +454,123 @@ export default function Home() {
                       />
                     </td>
                   </tr>
+                  {openJobId === job.id && (
+                    <tr className={styles.detailRow}>
+                      <td colSpan={COLUMN_COUNT}>{renderDetails(job, openJob?.id === job.id ? openJob : null)}</td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
-            {renderPager(jobs.length, currentPage, pageCount, (next) => {
+            {renderPager(sortedJobs.length, currentPage, pageCount, (next) => {
               setPage(next);
               window.scrollTo({ top: 0 });
             })}
           </>
         )}
       </main>
+    </div>
+  );
+}
+
+const COLUMN_COUNT = 9;
+
+// Unscored jobs always sort last, in either direction. Ties keep the
+// API's order (Array.prototype.sort is stable).
+function sortJobs(jobs: Job[], sort: Sort): Job[] {
+  if (sort.key === "default") return sort.descending ? jobs : [...jobs].reverse();
+  const sign = sort.descending ? -1 : 1;
+  return [...jobs].sort((a, b) => {
+    if (sort.key === "score") {
+      if (a.score === null || b.score === null) return (a.score === null ? 1 : 0) - (b.score === null ? 1 : 0);
+      return sign * (a.score - b.score);
+    }
+    return sign * a.postedDate.localeCompare(b.postedDate);
+  });
+}
+
+function renderSortHeader(label: string, key: SortKey, sort: Sort, sortBy: (key: SortKey) => void) {
+  const active = sort.key === key;
+  return (
+    <th aria-sort={active ? (sort.descending ? "descending" : "ascending") : "none"}>
+      <button
+        type="button"
+        className={`${styles.sortHeader} ${active ? styles.sortActive : ""}`}
+        onClick={() => sortBy(key)}
+      >
+        {label}
+        <span className={styles.sortArrow}>{active ? (sort.descending ? "\u25BC" : "\u25B2") : "\u2195"}</span>
+      </button>
+    </th>
+  );
+}
+
+// 70+ is a good match, 50-69 a stretch, under 50 weak (see the rubric in
+// src/lib/scoring/scoreJob.ts). "~" marks a score from the title alone.
+function renderScore(job: Job) {
+  if (job.score === null) {
+    return (
+      <span className={styles.unscored} title="Not scored yet">
+        {"\u2013"}
+      </span>
+    );
+  }
+  const level = job.score >= 70 ? styles.scoreHigh : job.score >= 50 ? styles.scoreMid : styles.scoreLow;
+  const titleOnly = job.scoreBasis === "title";
+  const hover = (titleOnly ? "Scored from the title only (no description). " : "") + (job.scoreReason ?? "");
+  return (
+    <span className={`${styles.score} ${level}`} title={hover}>
+      {titleOnly && "~"}
+      {job.score}
+    </span>
+  );
+}
+
+function renderDetails(job: Job, detail: JobDetail | null) {
+  return (
+    <div className={styles.details}>
+      {job.scoreReason && (
+        <p className={styles.detailReason}>
+          <strong>{job.scoreBasis === "title" ? "Score (from the title only): " : "Score: "}</strong>
+          {job.scoreReason}
+        </p>
+      )}
+      {!detail ? (
+        <p className={styles.muted}>Loading{"\u2026"}</p>
+      ) : (
+        <>
+          {(detail.matchedSkills.length > 0 || detail.missingSkills.length > 0) && (
+            <div className={styles.skills}>
+              {detail.matchedSkills.length > 0 && (
+                <div>
+                  <span className={styles.skillsLabel}>You have</span>
+                  {detail.matchedSkills.map((skill) => (
+                    <span key={skill} className={`${styles.skill} ${styles.skillMatched}`}>
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {detail.missingSkills.length > 0 && (
+                <div>
+                  <span className={styles.skillsLabel}>Missing</span>
+                  {detail.missingSkills.map((skill) => (
+                    <span key={skill} className={`${styles.skill} ${styles.skillMissing}`}>
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {detail.description ? (
+            <div className={styles.description}>{detail.description}</div>
+          ) : (
+            <p className={styles.muted}>No description available.</p>
+          )}
+        </>
+      )}
     </div>
   );
 }

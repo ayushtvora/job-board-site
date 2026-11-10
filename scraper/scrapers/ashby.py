@@ -5,7 +5,7 @@ public, unauthenticated posting API — returns every listed job in one call
 (no pagination), each with `id` (stable UUID, used as `external_id`),
 `title`, `department`, `team`, `location`, `secondaryLocations[]`,
 `address.postalAddress.addressCountry`, `publishedAt` (real ISO datetime),
-and `jobUrl`.
+`jobUrl`, and `descriptionHtml`.
 
 No server-side filtering, so Canada and department are matched client-side
 (jobs with a data title are kept whatever their department):
@@ -23,7 +23,7 @@ from collections.abc import Callable
 
 import httpx
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, clean_description, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -87,4 +87,5 @@ def _normalize(raw: dict) -> NormalizedJob:
         "category": category,
         "posted_date": published[:10] if published else None,
         "platform": "Ashby",
+        "description": clean_description(raw.get("descriptionHtml") or raw.get("descriptionPlain")),
     }

@@ -2,6 +2,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Playwright's bundled Node driver needs libatomic, which the slim image
+# lacks (`playwright install` exits 127 without it, seen 2026-11-10).
+RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 # Only scrapers/meta.py and scrapers/uber.py need a real browser

@@ -17,6 +17,14 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       NODE_ENV: ${NODE_ENV:-production}
+      # AI relevance scoring (see CLAUDE.md "Relevance score"). The worker
+      # stays off unless a resume URL and the model provider's key are set.
+      RESUME_URL_SOFTWARE: ${RESUME_URL_SOFTWARE:-}
+      RESUME_URL_DATA: ${RESUME_URL_DATA:-}
+      SCORING_MODEL: ${SCORING_MODEL:-google:gemini-3.5-flash-lite}
+      SCORING_RPM: ${SCORING_RPM:-10}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "3001:3000"
     depends_on:

@@ -31,7 +31,7 @@ from datetime import datetime
 
 import httpx
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, clean_description, is_data_title
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +100,12 @@ def _normalize(raw: dict) -> NormalizedJob:
         "category": raw.get("job_category", CATEGORY_LABEL),
         "posted_date": _parse_posted_date(raw.get("posted_date")),
         "platform": "Amazon Jobs (custom, in-house)",
+        # search.json carries the full posting, split into three HTML fields.
+        "description": clean_description(
+            f"{raw.get('description') or ''}"
+            f"<h3>Basic qualifications</h3>{raw.get('basic_qualifications') or ''}"
+            f"<h3>Preferred qualifications</h3>{raw.get('preferred_qualifications') or ''}"
+        ),
     }
 
 
