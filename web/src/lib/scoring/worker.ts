@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { APICallError } from "ai";
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
+import { effectivePostedDate } from "@/lib/serializeJob";
 import { scoringModelConfigured, scoringModelId } from "./model";
 import { type Field, FIELDS, loadResumes, resumeUrlsConfigured } from "./resume";
 import { PROMPT_VERSION, scoreJob } from "./scoreJob";
@@ -125,39 +126,56 @@ async function scoreNextJob(failures: Map<number, number>): Promise<"scored" | "
   if (keys.size === 0) return "idle";
 
   const skip = [...failures].filter(([, count]) => count >= MAX_JOB_FAILURES).map(([id]) => id);
-  const job = await prisma.job.findFirst({
-    where: {
-      ...IN_SCOPE,
-      id: { notIn: skip },
-      OR: FIELDS.filter((field) => keys.has(field)).map((field) => ({
-        field,
-        OR: [
-          { scoreKey: null },
-          { scoreKey: { not: keys.get(field) } },
-          // Scored from the title before the scraper found a description
-          // (e.g. jobs that existed before descriptions were scraped).
-          { scoreBasis: "title", description: { not: null } },
-        ],
-      })),
-      AND: {
-        // Wait for the scraper's description pass, unless it gave up.
-        OR: [
-          { description: { not: null } },
-          { descriptionAttempts: { gt: 0 } },
-          { firstSeenAt: { lt: new Date(Date.now() - DESCRIPTION_WAIT_MS) } },
-        ],
-      },
+  const where: Prisma.JobWhereInput = {
+    ...IN_SCOPE,
+    id: { notIn: skip },
+    OR: FIELDS.filter((field) => keys.has(field)).map((field) => ({
+      field,
+      OR: [
+        { scoreKey: null },
+        { scoreKey: { not: keys.get(field) } },
+        // Scored from the title before the scraper found a description
+        // (e.g. jobs that existed before descriptions were scraped).
+        { scoreBasis: "title", description: { not: null } },
+      ],
+    })),
+    AND: {
+      // Wait for the scraper's description pass, unless it gave up.
+      OR: [
+        { description: { not: null } },
+        { descriptionAttempts: { gt: 0 } },
+        { firstSeenAt: { lt: new Date(Date.now() - DESCRIPTION_WAIT_MS) } },
+      ],
     },
-    orderBy: [{ postedDate: { sort: "desc", nulls: "last" } }, { firstSeenAt: "desc" }],
-    select: {
-      id: true,
-      title: true,
-      location: true,
-      description: true,
-      field: true,
-      company: { select: { name: true } },
-    },
-  });
+  };
+  const select = {
+    id: true,
+    title: true,
+    location: true,
+    description: true,
+    field: true,
+    postedDate: true,
+    firstSeenAt: true,
+    company: { select: { name: true } },
+  } as const;
+  // Newest first by the date the table shows (posted_date, else
+  // first_seen_at; see effectivePostedDate). Prisma can't sort on that
+  // fallback, so take the newest dated and newest undated job and score
+  // whichever is newer.
+  const [dated, undated] = await Promise.all([
+    prisma.job.findFirst({
+      where: { ...where, postedDate: { not: null } },
+      orderBy: [{ postedDate: "desc" }, { firstSeenAt: "desc" }],
+      select,
+    }),
+    prisma.job.findFirst({ where: { ...where, postedDate: null }, orderBy: { firstSeenAt: "desc" }, select }),
+  ]);
+  const job =
+    dated && undated
+      ? effectivePostedDate(undated) > effectivePostedDate(dated)
+        ? undated
+        : dated
+      : (dated ?? undated);
   if (!job) return "idle";
 
   const field = job.field as Field;
