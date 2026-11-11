@@ -517,6 +517,7 @@ not host cron (per the architecture decision above).
     - Jobs2Web: **ICBC**, **University of Toronto**.
     - Other: **lululemon** (Avature keyword search), **D-Wave** (Rippling),
       **ICES** (BambooHR).
+    - Added 2026-11-11: **Mars** (Workday, behind a Phenom front-end).
   - **Loblaw** (was "Loblaw Digital") now reads careers.loblaw.ca, a
     Paradox site, since its Workday sites went empty.
   - Investigated but **not scraper-ready**: **CGI**, **Ontario Public
@@ -1834,6 +1835,14 @@ IDs, counts):
 - **UHN** posts on SmartRecruiters; its "VP Portfolio" custom field
   separates "Technology and Innovation" and "Data & Analytics" from the
   clinical roles.
+- **Mars** (Mars, Incorporated, added 2026-11-11): careers.mars.com is
+  Phenom, with every apply link going to Workday `mars.wd3/External`. The
+  scope is the "Digital Technologies" and "Data, Analytics & Insights"
+  job family groups. There's no country facet, so all 16 Canadian
+  `locations` IDs are passed. Locations read "CAN-Ontario-Bolton" (city
+  after province), so `mars.py` rewrites them to "Bolton, Ontario,
+  Canada" for `job_cities`. Of 36 Canadian postings on 2026-11-11, none
+  were in the tech groups; the keyword search found 1 data role.
 - **Not scraper-ready** (don't retry without new information):
   - LinkedIn: careers.linkedin.com is 403'd and it has no public ATS board
     (its jobs are on linkedin.com itself).
