@@ -503,9 +503,28 @@ not host cron (per the architecture decision above).
   - **Symcor**, Canada / technology departments (Dayforce), and **Tata
     Consultancy Services**, Canada / Technology function (TCS's own iBegin
     portal) — see "Symcor and TCS" below.
+  - Seventh wave (companies with data roles in Toronto/Vancouver; see
+    "Seventh wave and widening" below):
+    - Workday: **Capital One**, **Citi**, **Equifax**, **TransUnion**,
+      **Morningstar**, **Allstate**, **Aviva**, **Moneris**,
+      **Brookfield**, **Rakuten Kobo**, **Fidelity Canada**, **Ontario
+      Health**, **Samsung** (plus Samsung Research America's Greenhouse
+      board).
+    - Greenhouse: **Block**, **Later**, **AbCellera**, **Hootsuite**, **LG
+      AI Research**.
+    - Ashby: **Float**, **Visier**. Lever: **Wattpad**.
+    - SmartRecruiters: **NielsenIQ**, **University Health Network**.
+    - Jobs2Web: **ICBC**, **University of Toronto**.
+    - Other: **lululemon** (Avature keyword search), **D-Wave** (Rippling),
+      **ICES** (BambooHR).
+  - **Loblaw** (was "Loblaw Digital") now reads careers.loblaw.ca, a
+    Paradox site, since its Workday sites went empty.
   - Investigated but **not scraper-ready**: **CGI**, **Ontario Public
     Service**, **Tesla**, **CN**, **Siemens** (see "Fifth wave scraping
-    approach" below), and **Citadel** (see "Sixth wave scraping approach").
+    approach" below), **Citadel** (see "Sixth wave scraping approach"),
+    and LinkedIn, Dialpad, Super.com, Dapper Labs, Huawei Canada, Nielsen,
+    SickKids, BC Hydro, Vancity, TMU, SFU and the OSC (see "Seventh wave
+    and widening").
 - More companies and filters will be added later; scraper architecture should
   make adding a new company a matter of adding a new scraper module + a
   `companies` row (with its `sectors`, or it shows up under "Other"), not
@@ -1155,7 +1174,10 @@ where noted for Meta.
   initial test query looked like a JS-only SPA with 0 results, but that was
   a bad query — confirmed real server-rendered data with a working query).
   Confirmed working request: `?location=Canada&q=%22Software%20Engineer%22`
-  → real matches directly in the curl'd HTML. **No true category/team
+  → real matches directly in the curl'd HTML. (By 2026-11-10 that query
+  matched nothing, since Canadian roles are titled "Software Developer";
+  the scraper now reads every Canadian posting with no `q=`, see "Seventh
+  wave and widening".) **No true category/team
   facet** — confirmed via Playwright that the UI's own "What do you want to
   do?" field just resolves to the same free-text `q=` quoted-phrase search,
   not a separate facet param, so category filtering has the same
@@ -1336,7 +1358,10 @@ scraper. Each helper's docstring explains the API and the per-tenant hooks
   Liberty Mutual and Netflix (Eightfold apply/v2), Deloitte (SuccessFactors'
   newer career site), Xanadu (HiBob), Vidyard (Kula), FreshBooks (Gem),
   Government of BC (hrsmart), TransLink (PeopleSoft), BC Centre for Ability
-  (ADP) and NASA (USAJOBS).
+  (ADP), NASA (USAJOBS), Loblaw (Paradox), lululemon (Avature keyword
+  search), D-Wave (Rippling) and ICES (BambooHR).
+- `workday_cxs.py` retries a 429 after 10/30/60s. The wd3 host serves TD,
+  CIBC, Sun Life and others, and rate-limits them together.
 - Only Meta and Uber need a browser (Playwright) at scrape time; every
   other scraper is plain httpx. Both hold `base.BROWSER_LOCK`, so only
   one Chromium runs at a time.
@@ -1371,26 +1396,38 @@ department they're filed under, and each job gets a `field` of "Data" or
   every upsert. A data title that also says "software" ("Software Engineer,
   Data Platform") counts as Software. Machine learning / AI titles count as
   Software unless they mention data.
+- **Widened 2026-11-10** to ML and hands-on software titles as well: the
+  scope check everywhere is `base.is_core_title`, a data title
+  (`is_data_title`), an ML title (`ML_TITLE_PATTERN`: machine learning,
+  ML, AI engineer/scientist, applied scientist, NLP, ...) or a software
+  title (`SOFTWARE_TITLE_PATTERN`: software, developer, DevOps, SRE, full
+  stack, QA analyst, ...; deliberately not bare "engineer"), minus
+  `NOT_CORE_TITLE_PATTERN`. It found TD's ML engineers and scientists
+  outside Technology Solutions, CIBC's and Cisco's developer co-ops filed
+  under student categories, Scotiabank's AI engineers, and similar
+  (~+250 jobs). `job_field` still uses only `is_data_title`, so ML and
+  software titles stay "Software".
 - Category facets aren't used for data: they differ per site, many sites
   have none, and a data role often sits in some other category (TD's Data
   Scientists are spread across business lines). Title matching works the
   same everywhere.
 - **Sites whose scope is filtered client-side** (Greenhouse, Ashby, Lever,
   SmartRecruiters, Jibe, Dayforce, GC Jobs, Apple, Amazon, IBM, Meta, Uber,
-  and the title-keyword modules) keep any Canadian job with a data title.
+  and the title-keyword modules) keep any Canadian job with a core title.
   Amazon, IBM, Meta and Liberty Mutual stopped sending their category
   filter for this and now read all Canadian postings.
 - **Sites whose category filter runs on the server** (Workday facets,
   Phenom `category=`, Jobs2Web category pages, Oracle
   `selectedCategoriesFacet`, TalentBrew, Eightfold `filter_job_category`,
-  Google, EA) get a second keyword search for each of
-  `base.DATA_SEARCH_TERMS` ("data", "analytics"), same location filter,
-  no category, keeping data titles. These searches also match job
-  descriptions, but they're sorted by relevance with title matches first,
-  so paging stops at the first page without a data title. EA has no
-  keyword search wired up, so it reads its full Canada listing instead.
+  EA) get a second keyword search for each of `base.CORE_SEARCH_TERMS`
+  ("data", "analytics", "machine learning", "software", "developer"), same
+  location filter, no category, keeping core titles (labelled "Keyword
+  search"). These searches also match job descriptions, but they're
+  sorted by relevance with title matches first, so paging stops at the
+  first page without a core title. EA has no keyword search wired up, so
+  it reads its full Canada listing instead.
 - A module's own scope filter (`job_filter`, a title regex, etc.) is
-  bypassed for data titles, but a Canada filter still applies.
+  bypassed for core titles, but a Canada filter still applies.
 - Scotiabank and RBC have no Canada filter (see their sections), and their
   data searches don't either.
 
@@ -1428,7 +1465,8 @@ item, capped at 20k chars). It's filled in one of two ways:
 - **Inline**, where the listing response already has it: Workday CXS (the
   detail call it already makes), Greenhouse (`content`), Ashby, Lever,
   Jibe, Amazon, IBM (only a ~250-char teaser; the detail pages are behind
-  a WAF) and Xanadu (HiBob). `db.py` keeps a stored description when an
+  a WAF), Xanadu (HiBob), Loblaw (Paradox) and ICES (BambooHR's detail
+  endpoint). `db.py` keeps a stored description when an
   upsert sends none.
 - **`scraper/descriptions.py`**, after every run: each active job without
   one is fetched **once** (failures retry on later runs, up to 3 attempts
@@ -1646,7 +1684,8 @@ Things worth knowing across the batch:
   the pod host `fa-evmr-saasfaprod1.fa.ocs.oraclecloud.com`, not on
   jobs.nokia.com.
 - **Currently empty, but working**: Datadog (no Canadian office), PayPal,
-  ApplyBoard, Loblaw Digital (its Workday sites return 0 postings), Vidyard
+  ApplyBoard, Loblaw Digital (its Workday sites return 0 postings; since
+  2026-11-10 it's scraped from careers.loblaw.ca instead), Vidyard
   and FreshBooks (no tech postings).
 - **Figma caveat**: its postings' location says SF/NY, but 53 are tagged
   with a "Canada" office, and those are counted as Canada.
@@ -1749,6 +1788,63 @@ Things worth knowing across the batch:
   - Descriptions come from `GET /api/en-CA/job/desc/<numeric id>`, via
     `descriptions.py`'s `fetch_tcs`, because the job pages are a
     client-rendered Angular app.
+
+### Seventh wave and widening (investigated 2026-11-10)
+
+**Widening the existing companies.** A dry run of every scraper (no DB)
+plus targeted probes found these gaps, now fixed:
+
+- **Separate early-career Workday sites**, found by probing common site
+  names (`Campus`, `Student`, `University`, ...) on every tenant: CIBC
+  `campus` (~25 Toronto tech/data co-ops and new-grad roles), Sun Life
+  `Campus`, BlackBerry `Student`. They mix every field, so they're scoped
+  by title. Mastercard's `Campus` had nothing in Canada.
+- **ML and software roles outside the category** (TD ML scientists,
+  developer co-ops under student categories): `is_core_title` and
+  `CORE_SEARCH_TERMS`, see "Data roles".
+- **Google** silently returned 0 software jobs: its quoted `q="Software
+  Engineer"` search matches nothing because Canadian roles are now titled
+  "Software Developer". It reads all ~56 Canadian postings by title now.
+- **Loblaw**: both Workday sites report 0 postings; careers.loblaw.ca is
+  now a **Paradox** site. `POST /api/get-jobs` (needs the cookies from
+  loading `/jobs` first; `filter[category][0]=...`, `page_size` max 10).
+  See `scrapers/loblaw.py`.
+- **Adobe** gained its Information Technology and Research categories (it
+  only has ~3 Canadian postings).
+- Checked and genuinely empty, not broken: Oracle (17 Canadian postings,
+  none software/data), Statistics Canada (only field data-collection
+  clerks on GC Jobs), and the no-Canadian-office companies listed before.
+- Cadence and Netflix failed once with transient errors (a posting moved
+  mid-run; a 429) and passed on re-run.
+
+**New companies**, each module's docstring has the details (tenant, facet
+IDs, counts):
+
+- Workday tenants found by probing `<tenant>.wd{1,3,5,10,12}` with likely
+  site names: Capital One (`wd12/Capital_One`, Toronto location only),
+  Citi (`wd5`, site literally `2`), Equifax, TransUnion, Morningstar,
+  Allstate, Aviva, Moneris, Brookfield, Rakuten Kobo (`rakuten/Kobo`),
+  Fidelity Canada (`fil/fidelitycanada`), Ontario Health (`oh/OH`, no
+  category facet, under a hiring freeze), Samsung (`sec/Samsung_Careers`).
+- **lululemon** is Avature with AJAX-only facet IDs (like EA), so it runs
+  the site's `search=` keyword box per term and keeps Canadian core titles.
+- **D-Wave** uses Rippling: `api.rippling.com/platform/api/ats/v1/board/<slug>/jobs`.
+- **ICES** uses BambooHR: `<org>.bamboohr.com/careers/list`, and
+  `/careers/<id>/detail` for the date and description.
+- **UHN** posts on SmartRecruiters; its "VP Portfolio" custom field
+  separates "Technology and Innovation" and "Data & Analytics" from the
+  clinical roles.
+- **Not scraper-ready** (don't retry without new information):
+  - LinkedIn: careers.linkedin.com is 403'd and it has no public ATS board
+    (its jobs are on linkedin.com itself).
+  - Dialpad (careers page mentions Rippling, but there's no `dialpad`
+    board; its Greenhouse board has no Canadian postings), Super.com
+    (403; the Greenhouse board `super` is an unrelated company), Dapper
+    Labs, Huawei Canada, Nielsen (jobs.nielsen.com doesn't resolve;
+    NielsenIQ is scraped).
+  - SickKids (career.sickkids.ca doesn't resolve from here), BC Hydro
+    (app.bchydro.com portal), Vancity, TMU, SFU and the OSC: no ATS
+    found from their careers pages or search results.
 
 ## Deployment
 

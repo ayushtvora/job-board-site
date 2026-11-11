@@ -147,6 +147,34 @@ from . import uber
 from . import amd
 from . import symcor
 from . import tcs
+from . import capitalone
+from . import citi
+from . import equifax
+from . import transunion
+from . import morningstar
+from . import allstate
+from . import aviva
+from . import moneris
+from . import brookfield
+from . import kobo
+from . import fidelitycanada
+from . import ontariohealth
+from . import samsung
+from . import block
+from . import later
+from . import abcellera
+from . import hootsuite
+from . import lgairesearch
+from . import float
+from . import visier
+from . import wattpad
+from . import nielseniq
+from . import uhn
+from . import icbc
+from . import uoft
+from . import lululemon
+from . import dwave
+from . import ices
 
 # Adding a new company: write scrapers/<slug>.py exposing scrape() -> list[NormalizedJob],
 # add it here, and add a matching row to the companies table. Companies on a
@@ -301,4 +329,32 @@ SCRAPERS: dict[str, Callable[[], list[NormalizedJob]]] = {
     "amd": amd.scrape,
     "symcor": symcor.scrape,
     "tcs": tcs.scrape,
+    "capitalone": capitalone.scrape,
+    "citi": citi.scrape,
+    "equifax": equifax.scrape,
+    "transunion": transunion.scrape,
+    "morningstar": morningstar.scrape,
+    "allstate": allstate.scrape,
+    "aviva": aviva.scrape,
+    "moneris": moneris.scrape,
+    "brookfield": brookfield.scrape,
+    "kobo": kobo.scrape,
+    "fidelitycanada": fidelitycanada.scrape,
+    "ontariohealth": ontariohealth.scrape,
+    "samsung": samsung.scrape,
+    "block": block.scrape,
+    "later": later.scrape,
+    "abcellera": abcellera.scrape,
+    "hootsuite": hootsuite.scrape,
+    "lgairesearch": lgairesearch.scrape,
+    "float": float.scrape,
+    "visier": visier.scrape,
+    "wattpad": wattpad.scrape,
+    "nielseniq": nielseniq.scrape,
+    "uhn": uhn.scrape,
+    "icbc": icbc.scrape,
+    "uoft": uoft.scrape,
+    "lululemon": lululemon.scrape,
+    "dwave": dwave.scrape,
+    "ices": ices.scrape,
 }
