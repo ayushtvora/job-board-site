@@ -23,7 +23,7 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
-from .base import CANADA_PATTERN, NormalizedJob, is_data_title
+from .base import CANADA_PATTERN, NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def scrape() -> list[NormalizedJob]:
                     continue
                 seen_ids.add(job["external_id"])
                 new_on_page += 1
-                in_scope = job["category"] in CATEGORIES or is_data_title(job["title"])
+                in_scope = job["category"] in CATEGORIES or is_core_title(job["title"])
                 if in_scope and CANADA_PATTERN.search(job["location"]):
                     jobs.append(job)
             if new_on_page == 0:

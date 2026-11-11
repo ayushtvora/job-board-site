@@ -36,7 +36,7 @@ import logging
 
 import httpx
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ def scrape() -> list[NormalizedJob]:
                     continue
                 seen_ids.add(raw["id"])
                 total += 1
-                if (raw.get("domain") or "").upper() in TECH_DOMAINS or is_data_title(raw["title"]):
+                if (raw.get("domain") or "").upper() in TECH_DOMAINS or is_core_title(raw["title"]):
                     jobs.append(_normalize(raw))
             if payload.get("last", True):
                 break

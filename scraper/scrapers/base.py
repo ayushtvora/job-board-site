@@ -45,17 +45,54 @@ DATA_TITLE_PATTERN = re.compile(
 # product ("Data Platform Sales Representative").
 NOT_DATA_TITLE_PATTERN = re.compile(
     r"data[ -]?cent(?:er|re)|data entry|data protection|data privacy|annotat|data label|data collection|"
-    r"\bsales\b|account (?:executive|manager)|counsel|\blegal\b|assistant|recruit|product manager",
+    # "Assistant Vice President" is a bank seniority title, not an assistant.
+    r"\bsales\b|account (?:executive|manager)|counsel|\blegal\b|assistant(?! vice)|recruit|product manager",
+    re.IGNORECASE,
+)
+# Machine learning / AI roles. They're in every company's scope like data
+# roles, but count as Software for `field` (unless they also say data).
+ML_TITLE_PATTERN = re.compile(
+    r"machine learning|(?-i:\bML\b)|deep learning|mlops|\bNLP\b|computer vision|\bLLM|"
+    # Not bare "research scientist": biotech and pharma use it for lab roles.
+    r"(?-i:\bAI\b)[\w &/,-]{0,25}(?:engineer|scientist|developer|researcher)|applied scientist",
+    re.IGNORECASE,
+)
+# Hands-on software roles, wherever a site files them (a co-op under
+# "Students", a developer under a business line). Deliberately not bare
+# "engineer", which would pull in sales, field and mechanical engineers.
+SOFTWARE_TITLE_PATTERN = re.compile(
+    r"software|logiciel|developer|d[ée]veloppeu|programmer|programmeu|\bSDET\b|devops|(?-i:\bSRE\b)|"
+    r"site reliability|full[ -]?stack|front[ -]?end|back[ -]?end|(?-i:\bQA\b)(?: test)? (?:analyst|engineer|tester)|"
+    r"test automation|"
+    r"(?:ios|android|mobile|web|platform|infrastructure|cloud|security|firmware|embedded) engineer",
+    re.IGNORECASE,
+)
+# Titles that match those but aren't hands-on tech roles.
+NOT_CORE_TITLE_PATTERN = re.compile(
+    r"business develop|developer relations|courseware|training material|instructional|content develop|"
+    r"capitali[sz]ation|managing director|software (?:sales|licens)",
     re.IGNORECASE,
 )
 # Free-text search terms for the sites that filter by category on the
-# server, so data roles need a separate keyword search (results are then
-# kept only if the title passes is_data_title).
-DATA_SEARCH_TERMS = ("data", "analytics")
+# server. Data, ML and software roles filed outside the category (a TD ML
+# scientist under a business line, a CIBC developer co-op under
+# "Students") need a separate keyword search; results are then kept only
+# if the title passes is_core_title.
+CORE_SEARCH_TERMS = ("data", "analytics", "machine learning", "software", "developer")
 
 
 def is_data_title(title: str) -> bool:
     return bool(DATA_TITLE_PATTERN.search(title)) and not NOT_DATA_TITLE_PATTERN.search(title)
+
+
+def is_core_title(title: str) -> bool:
+    """A data, ML or software title: in every company's scope, whatever
+    category or department the site files it under."""
+    if is_data_title(title):
+        return True
+    if NOT_DATA_TITLE_PATTERN.search(title) or NOT_CORE_TITLE_PATTERN.search(title):
+        return False
+    return bool(ML_TITLE_PATTERN.search(title) or SOFTWARE_TITLE_PATTERN.search(title))
 
 
 def job_field(title: str) -> str:

@@ -64,7 +64,7 @@ import re
 
 import httpx
 
-from .base import NormalizedJob, clean_description, is_data_title
+from .base import NormalizedJob, clean_description, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ def scrape() -> list[NormalizedJob]:
                     continue
                 seen_ids.add(job_id)
                 source = hit["_source"]
-                if source.get("field_keyword_08") in CATEGORIES or is_data_title(source["title"]):
+                if source.get("field_keyword_08") in CATEGORIES or is_core_title(source["title"]):
                     jobs.append(_normalize(job_id, source))
 
             offset += PAGE_SIZE

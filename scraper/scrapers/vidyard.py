@@ -21,7 +21,7 @@ import re
 
 import httpx
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ def scrape() -> list[NormalizedJob]:
         _normalize(raw)
         for raw in raw_jobs
         if raw.get("listed", True)
-        and (DEPARTMENT_PATTERN.search(_department(raw)) or is_data_title(raw["title"]))
+        and (DEPARTMENT_PATTERN.search(_department(raw)) or is_core_title(raw["title"]))
         and _is_canada(raw)
     ]
     logger.info("Vidyard: fetched %d matching jobs (of %d total)", len(jobs), len(raw_jobs))

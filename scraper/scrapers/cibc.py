@@ -17,9 +17,15 @@ docstring for how this pattern works in general. CIBC-specific notes:
   facet's label, same reasoning as SOTI's category.
 - Posted date and canonical apply URL: same as SOTI, from each job's detail
   endpoint (`jobPostingInfo.startDate` / `.externalUrl`).
+- Co-ops, internships and new-grad programs are on a second site,
+  `cibc.wd3.myworkdayjobs.com/campus` (found 2026-11-10 by probing common
+  site names; 45 Canadian postings, ~25 of them tech or data, all
+  Toronto). Its job families are "Students and Rotational Programs" etc.,
+  so it's scoped by title (`base.is_core_title`). Some campus postings are
+  on the main site too under the same req ID, so results are de-duplicated.
 """
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_core_title
 from .workday_cxs import scrape_workday
 
 # Opaque Workday facet IDs, not derivable from their labels — confirmed
@@ -29,11 +35,26 @@ COUNTRY_FACET_ID = "a30a87ed25634629aa6c3958aa2b91ea"  # Canada
 
 
 def scrape() -> list[NormalizedJob]:
-    return scrape_workday(
+    jobs: dict[str, NormalizedJob] = {}
+    for job in scrape_workday(
         name="CIBC",
         base_url="https://cibc.wd3.myworkdayjobs.com",
         tenant="cibc",
         site="search",
         applied_facets={"jobFamilyGroup": [CATEGORY_FACET_ID], "Country": [COUNTRY_FACET_ID]},
         category_label="Information Technology",
-    )
+    ) + scrape_workday(
+        # Co-ops, internships and new-grad programs (45 Canadian postings on
+        # 2026-11-10). Its job families are "Students and Rotational
+        # Programs" and the like, so scope is by title.
+        name="CIBC (Campus)",
+        base_url="https://cibc.wd3.myworkdayjobs.com",
+        tenant="cibc",
+        site="campus",
+        applied_facets={"Country": [COUNTRY_FACET_ID]},
+        category_label="Campus",
+        job_filter=lambda raw, _detail: is_core_title(raw["title"]),
+    ):
+        # Many campus postings are on the main site too, with the same req ID.
+        jobs.setdefault(job["external_id"], job)
+    return list(jobs.values())

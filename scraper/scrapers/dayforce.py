@@ -17,7 +17,7 @@ a Playwright network capture (2026-09-25):
   `GET /api/geo/<ns>/postingattributes/departments/<ns>/<jobBoardId>/<locale>`,
   so scrapers pick departments by name at runtime, one search per department.
   With a department filter, one more search without `departmentId` picks
-  up data titles from every department.
+  up core titles (data, ML, software) from every department.
 - Per posting: `jobPostingId` (used as `external_id` — a requisition can
   have several postings), `jobReqId`, `jobTitle`, `postingStartTimestampUTC`
   (real posted date), `postingLocations[]` with `isoCountryCode`
@@ -29,7 +29,7 @@ from collections.abc import Callable
 
 import httpx
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ def scrape_dayforce(
     country_code: str = "CA",
 ) -> list[NormalizedJob]:
     """`department_filter(name)` selects departments to search; None = all
-    jobs. Data titles are kept from every department either way."""
+    jobs. Core titles (data, ML, software) are kept from every department either way."""
     search_url = f"{BASE_URL}/api/geo/{namespace}/jobposting/search"
     jobs: list[NormalizedJob] = []
     seen_ids: set[int] = set()
@@ -60,7 +60,7 @@ def scrape_dayforce(
         csrf.raise_for_status()
         headers = {"x-csrf-token": csrf.json()["csrfToken"]}
 
-        # (department id, department name, keep only data titles)
+        # (department id, department name, keep only core titles (data, ML, software))
         if department_filter is None:
             searches: list[tuple[int | None, str, bool]] = [(None, "", False)]
         else:
@@ -92,7 +92,7 @@ def scrape_dayforce(
                 payload = response.json()
                 postings = payload.get("jobPostings") or []
                 for raw in postings:
-                    if raw["jobPostingId"] in seen_ids or (data_only and not is_data_title(raw["jobTitle"])):
+                    if raw["jobPostingId"] in seen_ids or (data_only and not is_core_title(raw["jobTitle"])):
                         continue
                     seen_ids.add(raw["jobPostingId"])
                     if not _in_country(raw, country_code):

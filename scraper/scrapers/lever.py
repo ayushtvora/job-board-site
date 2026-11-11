@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from .base import NormalizedJob, clean_description, is_data_title
+from .base import NormalizedJob, clean_description, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ def scrape_lever(
         raw
         for raw in postings
         if raw.get("country") == country
-        and (department_filter((raw.get("categories") or {}).get("department") or "") or is_data_title(raw["text"]))
+        and (department_filter((raw.get("categories") or {}).get("department") or "") or is_core_title(raw["text"]))
     ]
     logger.info("%s: fetched %d matching jobs (of %d total)", name, len(matched), len(postings))
     return [_normalize(raw) for raw in matched]

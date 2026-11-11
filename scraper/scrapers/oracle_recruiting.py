@@ -22,8 +22,8 @@ unauthenticated REST resource,
   `JobFamily`/`JobFunction` are null in practice, so the category is either
   the filtered facet's label or `category_fn`'s result.
 - Data roles: tenants filtered by `selectedCategoriesFacet` get a second
-  search without it, `keyword=<term>` for each of `DATA_SEARCH_TERMS`,
-  keeping only data titles (sorted by relevance, so paging stops at the
+  search without it, `keyword=<term>` for each of `CORE_SEARCH_TERMS`,
+  keeping only core titles (data, ML, software) (sorted by relevance, so paging stops at the
   first page without one).
 - The public job page is `https://<host>/hcmUI/CandidateExperience/en/sites/<site>/job/<Id>`.
 """
@@ -33,12 +33,12 @@ from collections.abc import Callable
 
 import httpx
 
-from .base import DATA_SEARCH_TERMS, NormalizedJob, is_data_title
+from .base import CORE_SEARCH_TERMS, NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
 MAX_PAGES = 20
-DATA_SEARCH_CATEGORY = "Data (keyword search)"
+KEYWORD_SEARCH_CATEGORY = "Keyword search"
 
 
 def scrape_oracle_recruiting(
@@ -57,7 +57,7 @@ def scrape_oracle_recruiting(
 ) -> list[NormalizedJob]:
     """`finder_filters` are extra `findReqs` pairs, e.g.
     `{"selectedCategoriesFacet": "<id>"}`. `job_filter(raw)` can drop jobs
-    client-side, including data-search ones; `category_fn(raw)` overrides
+    client-side, including keyword-search ones; `category_fn(raw)` overrides
     `category_label`."""
     api_url = f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
     job_url = f"https://{host}/hcmUI/CandidateExperience/en/sites/{site_number}/job/{{id}}"
@@ -69,7 +69,7 @@ def scrape_oracle_recruiting(
 
         def scrape_pass(filters: dict[str, str], data_only: bool) -> int | None:
             """One paged search. With `data_only` (a keyword search, sorted
-            by relevance), only data titles are kept, and paging stops at
+            by relevance), only core titles (data, ML, software) are kept, and paging stops at
             the first page without one."""
             offset = 0
             total: int | None = None
@@ -95,7 +95,7 @@ def scrape_oracle_recruiting(
 
                 for raw in requisitions:
                     job_id = str(raw["Id"])
-                    if job_id in seen_ids or (data_only and not is_data_title(raw["Title"])):
+                    if job_id in seen_ids or (data_only and not is_core_title(raw["Title"])):
                         continue
                     seen_ids.add(job_id)
                     if job_filter is not None and not job_filter(raw):
@@ -105,13 +105,13 @@ def scrape_oracle_recruiting(
                         "title": raw["Title"].strip(),
                         "url": job_url.format(id=job_id),
                         "location": raw.get("PrimaryLocation") or "",
-                        "category": DATA_SEARCH_CATEGORY if data_only else (category_fn(raw) if category_fn else category_label),
+                        "category": KEYWORD_SEARCH_CATEGORY if data_only else (category_fn(raw) if category_fn else category_label),
                         "posted_date": raw.get("PostedDate"),
                         "platform": "Oracle Recruiting Cloud",
                     })
 
                 offset += page_size
-                if offset >= total or (data_only and not any(is_data_title(raw["Title"]) for raw in requisitions)):
+                if offset >= total or (data_only and not any(is_core_title(raw["Title"]) for raw in requisitions)):
                     break
             else:
                 logger.warning("%s scrape hit MAX_PAGES=%d without finishing — got %d jobs", name, MAX_PAGES, len(jobs))
@@ -122,7 +122,7 @@ def scrape_oracle_recruiting(
         # category facet the first pass already saw every job.
         location_filters = {k: v for k, v in (finder_filters or {}).items() if k != "selectedCategoriesFacet"}
         if location_filters != (finder_filters or {}):
-            for term in DATA_SEARCH_TERMS:
+            for term in CORE_SEARCH_TERMS:
                 scrape_pass({**location_filters, "keyword": term}, data_only=True)
 
     logger.info("%s: fetched %d jobs (site reported total=%s before client-side filters)", name, len(jobs), total)

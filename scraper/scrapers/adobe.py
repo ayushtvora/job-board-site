@@ -1,4 +1,9 @@
-"""Adobe careers scraper (Engineering and Product category, Canada only).
+"""Adobe careers scraper (Engineering and Product, Information Technology
+and Research categories, Canada only).
+
+Adobe had only 3 Canadian postings on 2026-11-10, one of them an IT-category
+"Customer Success Engineer", so the IT and Research categories were added
+then.
 
 Same Phenom People platform as RBC/BMO (scrapers/rbc.py, scrapers/bmo.py) —
 job data is embedded server-side in a `phApp.ddo = {...}` JSON blob, so a
@@ -41,7 +46,7 @@ def scrape() -> list[NormalizedJob]:
     return scrape_phenom(
         name="Adobe",
         list_url="https://careers.adobe.com/us/en/search-results",
-        categories=["Engineering and Product"],
+        categories=["Engineering and Product", "Information Technology", "Research"],
         platform="Workday",
         job_filter=lambda raw: raw.get("country") == "Canada",
     )

@@ -1,4 +1,4 @@
-"""Google careers scraper (Canada / free-text "Software Engineer" search, plus data roles).
+"""Google careers scraper (every Canadian posting, kept by title).
 
 Google's own careers site (careers.google.com, served under
 google.com/about/careers/applications/jobs/results) is a fully open,
@@ -7,11 +7,15 @@ bot-blocking encountered. See CLAUDE.md's "Meta, Amazon, Google, Apple,
 Microsoft, IBM, Canonical scraping approach" section (Google bullet) for how
 this was found.
 
-**Known limitation, not a bug**: Google exposes no true category/team facet.
-The UI's "what do you want to do?" field just resolves to the same free-text
-`q=` quoted-phrase search used here (`q="Software Engineer"`), so this is a
-best-effort text-match filter, not an exact category filter like RBC's
-`category=` or Workday's `jobFamilyGroup` facets elsewhere in this project.
+Google exposes no category/team facet; the UI's "what do you want to do?"
+field is just the free-text `q=` search. This scraper used to search
+`q="Software Engineer"`, but by 2026-11-10 Google titled its Canadian
+engineering roles "Software Developer", the quoted phrase matched nothing,
+and the scraper silently found 0 software jobs. Canada only has ~56
+postings (3 pages), so it now reads all of them with no `q=` and keeps
+`base.is_core_title` titles (software, data and ML roles), which also drops
+"Customer Engineer", sales and the like.
+
 `location=Canada` IS a real server-side facet (confirmed via the results
 page's own location chip) and matches jobs by ANY of their listed locations
 — a job's *displayed* primary location (the first one shown in the listing)
@@ -20,10 +24,6 @@ multi-location and includes Canada (confirmed directly on one such job
 during investigation). This scraper takes the listing's displayed location
 as-is rather than fetching every detail page to find the "real" one, since
 the job itself is still a genuine match returned by Google's own filter.
-
-Data roles come from a second search, `q=data`, keeping only data titles
-(`base.is_data_title`); results are sorted by relevance, so paging stops
-at the first page without one. On 2026-11-02 it had ~2 pages for Canada.
 
 HTML structure (found via live inspection — CLAUDE.md deliberately didn't
 give an exact selector):
@@ -51,48 +51,39 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www.google.com/about/careers/applications"
 RESULTS_URL = f"{BASE_URL}/jobs/results"
 LOCATION = "Canada"
-QUERY = '"Software Engineer"'
-CATEGORY_LABEL = "Software Engineer (free-text search)"
-DATA_QUERY = "data"
-DATA_CATEGORY_LABEL = "Data (free-text search)"
-
+CATEGORY_LABEL = "Title match"
 PAGE_SIZE = 20
-MAX_PAGES = 50  # safety cap; this query currently returns a handful of pages
+MAX_PAGES = 50  # safety cap; Canada currently has ~3 pages
 
 
 def scrape() -> list[NormalizedJob]:
     jobs: list[NormalizedJob] = []
     seen_ids: set[str] = set()
-
     with httpx.Client(timeout=30, headers={"User-Agent": "Mozilla/5.0"}) as client:
-        for query, label, data_only in ((QUERY, CATEGORY_LABEL, False), (DATA_QUERY, DATA_CATEGORY_LABEL, True)):
-            for page in range(1, MAX_PAGES + 1):
-                response = client.get(RESULTS_URL, params={"location": LOCATION, "q": query, "page": page})
-                response.raise_for_status()
-
-                items = _extract_items(response.text)
-                if not items:
-                    break
-
-                for raw in items:
-                    job_id = raw["id"]
-                    if job_id in seen_ids or (data_only and not is_data_title(raw["title"])):
-                        continue
-                    seen_ids.add(job_id)
-                    jobs.append(_normalize(raw, label))
-                if data_only and not any(is_data_title(raw["title"]) for raw in items):
-                    break
-            else:
-                logger.warning("Google scrape of %r hit MAX_PAGES=%d without finishing", query, MAX_PAGES)
-
-    logger.info("Google: fetched %d jobs", len(jobs))
+        for page in range(1, MAX_PAGES + 1):
+            response = client.get(RESULTS_URL, params={"location": LOCATION, "page": page})
+            response.raise_for_status()
+            items = _extract_items(response.text)
+            if not items:
+                break
+            for raw in items:
+                if raw["id"] in seen_ids:
+                    continue
+                seen_ids.add(raw["id"])
+                if is_core_title(raw["title"]):
+                    jobs.append(_normalize(raw, CATEGORY_LABEL))
+        else:
+            logger.warning("Google scrape hit MAX_PAGES=%d without finishing", MAX_PAGES)
+    if not seen_ids:
+        raise RuntimeError("Google returned no Canadian postings at all; the page layout may have changed")
+    logger.info("Google: kept %d of %d Canadian postings", len(jobs), len(seen_ids))
     return jobs
 
 

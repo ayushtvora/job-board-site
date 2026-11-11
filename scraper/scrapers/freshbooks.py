@@ -20,7 +20,7 @@ import re
 
 import httpx
 
-from .base import CANADA_PATTERN, NormalizedJob, is_data_title
+from .base import CANADA_PATTERN, NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def scrape() -> list[NormalizedJob]:
     jobs = [
         _normalize(post)
         for post in posts
-        if (DEPARTMENT_PATTERN.search(_departments(post)) or is_data_title(post["title"]))
+        if (DEPARTMENT_PATTERN.search(_departments(post)) or is_core_title(post["title"]))
         and any(CANADA_PATTERN.search(s) for s in _locations(post))
     ]
     logger.info("FreshBooks: fetched %d matching jobs (of %d total)", len(jobs), len(posts))

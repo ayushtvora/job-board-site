@@ -12,7 +12,7 @@ scrapers/workday_cxs.py.
 
 import re
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, is_core_title
 from .workday_cxs import scrape_workday
 
 CANADA_FACET_ID = "a30a87ed25634629aa6c3958aa2b91ea"
@@ -29,5 +29,5 @@ def scrape() -> list[NormalizedJob]:
         site="ApplyBoardNH",
         applied_facets={"locationCountry": [CANADA_FACET_ID]},
         category_label="Technology",
-        job_filter=lambda raw, _detail: bool(TECH_TITLE_PATTERN.search(raw["title"])) or is_data_title(raw["title"]),
+        job_filter=lambda raw, _detail: bool(TECH_TITLE_PATTERN.search(raw["title"])) or is_core_title(raw["title"]),
     )

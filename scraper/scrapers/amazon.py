@@ -31,7 +31,7 @@ from datetime import datetime
 
 import httpx
 
-from .base import NormalizedJob, clean_description, is_data_title
+from .base import NormalizedJob, clean_description, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ def scrape() -> list[NormalizedJob]:
                 if job_id in seen_ids:
                     continue
                 seen_ids.add(job_id)
-                if raw.get("job_category") == CATEGORY_LABEL or is_data_title(raw["title"]):
+                if raw.get("job_category") == CATEGORY_LABEL or is_core_title(raw["title"]):
                     jobs.append(_normalize(raw))
 
             offset += PAGE_SIZE

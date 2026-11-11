@@ -30,7 +30,7 @@ import re
 
 import httpx
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ def scrape() -> list[NormalizedJob]:
         job for job in rows.values()
         if TECH_TITLE_PATTERN.search(job["title"])
         or TECH_DEPARTMENT_PATTERN.search(job["category"])
-        or is_data_title(job["title"])
+        or is_core_title(job["title"])
     ]
     logger.info("TransLink: fetched %d matching jobs (of %d openings)", len(jobs), len(rows))
     return jobs

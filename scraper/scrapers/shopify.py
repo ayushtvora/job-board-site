@@ -36,7 +36,7 @@ import logging
 
 import httpx
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ def scrape() -> list[NormalizedJob]:
     with httpx.Client(timeout=30, headers={"User-Agent": "Mozilla/5.0"}) as client:
         roles = _load(client, "/careers/jobs", LIST_ROUTE_KEY)["roles"]
         candidates = [
-            role for role in roles if role.get("disciplineSlug") == DISCIPLINE_SLUG or is_data_title(role["title"])
+            role for role in roles if role.get("disciplineSlug") == DISCIPLINE_SLUG or is_core_title(role["title"])
         ]
 
         jobs = []
@@ -63,7 +63,7 @@ def scrape() -> list[NormalizedJob]:
             detail = _load(client, role["href"], DETAIL_ROUTE_KEY)
             posting = detail["jobPosting"]
             locations = {loc["id"]: loc for loc in detail.get("locations") or []}
-            in_scope = posting.get("teamName") == TEAM_NAME or is_data_title(posting["title"])
+            in_scope = posting.get("teamName") == TEAM_NAME or is_core_title(posting["title"])
             if in_scope and _matches_location(posting, locations):
                 jobs.append(_normalize(posting, locations))
 

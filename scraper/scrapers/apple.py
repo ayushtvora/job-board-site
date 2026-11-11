@@ -37,7 +37,7 @@ import logging
 
 import httpx
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ def scrape() -> list[NormalizedJob]:
                 if job_id in seen_ids:
                     continue
                 seen_ids.add(job_id)
-                if raw.get("team", {}).get("teamName") != TEAM_NAME and not is_data_title(raw["postingTitle"]):
+                if raw.get("team", {}).get("teamName") != TEAM_NAME and not is_core_title(raw["postingTitle"]):
                     continue
                 jobs.append(_normalize(raw))
 

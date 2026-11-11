@@ -50,7 +50,7 @@ from xml.etree import ElementTree
 import httpx
 from bs4 import BeautifulSoup
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ FILTER_PARAMS = {
 }
 CATEGORY_LABEL = "Software Development"
 COUNTRY_PARAMS = {key: value for key, value in FILTER_PARAMS.items() if not key.startswith("4536")}
-DATA_CATEGORY_LABEL = "Data (title match)"
+DATA_CATEGORY_LABEL = "Title match"
 
 PAGE_SIZE = 20  # the site's actual (unconfigurable) page size — see docstring
 MAX_PAGES = 50  # safety cap; this filter currently has ~50 jobs
@@ -101,7 +101,7 @@ def scrape() -> list[NormalizedJob]:
                     break
 
                 for job in page_jobs:
-                    if job["external_id"] in seen_ids or (data_only and not is_data_title(job["title"])):
+                    if job["external_id"] in seen_ids or (data_only and not is_core_title(job["title"])):
                         continue
                     seen_ids.add(job["external_id"])
                     job["posted_date"] = posted_dates.get(job["external_id"])

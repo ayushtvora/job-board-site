@@ -19,12 +19,16 @@ config + its own investigation notes:
   primary `location` is often a US city (e.g. Thomson Reuters postings
   that list Toronto as one of five `additionalLocations`), so Canadian
   locations are shown first, with a count of the rest.
-- Data roles: after the configured search, the same search runs again
-  without the category facets (`CATEGORY_FACET_KEYS`) for each of
-  `DATA_SEARCH_TERMS`, keeping only data titles (before fetching any
-  detail page). `searchText` also matches descriptions, but results are
-  sorted by relevance with title matches first, so paging stops at the
-  first page with no data title.
+- Data, ML and software roles outside the category facets: after the
+  configured search, the same search runs again without the category
+  facets (`CATEGORY_FACET_KEYS`) for each of `CORE_SEARCH_TERMS`, keeping
+  only `is_core_title` titles (before fetching any detail page).
+  `searchText` also matches descriptions, but results are sorted by
+  relevance with title matches first, so paging stops at the first page
+  with no such title.
+- A 429 is retried after a pause (`RATE_LIMIT_BACKOFF_SECONDS`): the
+  wd3 host serves many tenants here (TD, CIBC, Sun Life, ...) and
+  rate-limits them together.
 - The description is the detail's `jobDescription` (HTML).
 - Postings without an `externalPath` are skipped. CIBC's list response
   has been seen to include a stub posting with only `bulletFields`
@@ -32,12 +36,13 @@ config + its own investigation notes:
 """
 
 import logging
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
-from .base import CANADA_PATTERN, DATA_SEARCH_TERMS, NormalizedJob, clean_description, is_data_title
+from .base import CANADA_PATTERN, CORE_SEARCH_TERMS, NormalizedJob, clean_description, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +50,7 @@ PAGE_SIZE = 20
 # Detail pages fetched at once per tenant (one extra request per posting).
 DETAIL_WORKERS = 4
 # Facet parameters that pick a job category rather than a location, across
-# the configured tenants. The data search drops these.
+# the configured tenants. The keyword searches drop these.
 CATEGORY_FACET_KEYS = {
     "jobFamilyGroup",
     "jobFamily",
@@ -54,7 +59,20 @@ CATEGORY_FACET_KEYS = {
     "EEB_-_Job_Categories_for_External_Site_Extended",
     "CF_Job_Posting_Anchor_Job_Category_EEB_Extended",
 }
-DATA_SEARCH_CATEGORY = "Data (keyword search)"
+KEYWORD_SEARCH_CATEGORY = "Keyword search"
+# Pauses before retrying a 429; after the last one the error is raised.
+RATE_LIMIT_BACKOFF_SECONDS = (10, 30, 60)
+
+
+def _send(client: httpx.Client, method: str, url: str, name: str, **kwargs) -> httpx.Response:
+    for backoff in (*RATE_LIMIT_BACKOFF_SECONDS, None):
+        response = client.request(method, url, **kwargs)
+        if response.status_code != 429 or backoff is None:
+            response.raise_for_status()
+            return response
+        logger.warning("%s: rate-limited (429), retrying in %ds", name, backoff)
+        time.sleep(backoff)
+    raise AssertionError("unreachable")
 
 
 def scrape_workday(
@@ -83,22 +101,22 @@ def scrape_workday(
     with httpx.Client(timeout=30) as client, ThreadPoolExecutor(max_workers=DETAIL_WORKERS) as detail_pool:
 
         def fetch_detail(raw: dict) -> dict:
-            detail_response = client.get(detail_url.format(path=raw["externalPath"]))
-            detail_response.raise_for_status()
-            return detail_response.json()["jobPostingInfo"]
+            return _send(client, "GET", detail_url.format(path=raw["externalPath"]), name).json()["jobPostingInfo"]
 
         def scrape_pass(facets: dict[str, list[str]], search_text: str, data_only: bool) -> int | None:
-            """One paged search. With `data_only`, only data titles are
+            """One paged search. With `data_only`, only core titles (data, ML, software) are
             kept, and paging stops at the first page without one (results
             are sorted by relevance, so title matches come first)."""
             offset = 0
             total: int | None = None
             for _ in range(max_pages):
-                response = client.post(
+                response = _send(
+                    client,
+                    "POST",
                     list_url,
+                    name,
                     json={"appliedFacets": facets, "limit": PAGE_SIZE, "offset": offset, "searchText": search_text},
                 )
-                response.raise_for_status()
                 payload = response.json()
                 if total is None:
                     total = payload["total"]
@@ -112,7 +130,7 @@ def scrape_workday(
                     if path is None:
                         logger.warning("%s: skipping posting with no externalPath: %s", name, raw)
                         continue
-                    if path in seen_paths or (data_only and not is_data_title(raw["title"])):
+                    if path in seen_paths or (data_only and not is_core_title(raw["title"])):
                         continue
                     seen_paths.add(path)
                     new_postings.append(raw)
@@ -124,13 +142,13 @@ def scrape_workday(
                     if job_filter is not None and not job_filter(raw, detail):
                         continue
                     category = (category_fn(raw, detail) if category_fn else None) or (
-                        DATA_SEARCH_CATEGORY if data_only else category_label
+                        KEYWORD_SEARCH_CATEGORY if data_only else category_label
                     )
                     jobs.append(_normalize(raw, detail, category))
 
                 offset += PAGE_SIZE
                 # .get: stub postings (see the docstring) can lack a title too.
-                if offset >= total or (data_only and not any(is_data_title(raw.get("title", "")) for raw in postings)):
+                if offset >= total or (data_only and not any(is_core_title(raw.get("title", "")) for raw in postings)):
                     break
             else:
                 logger.warning("%s scrape hit max_pages=%d without finishing — got %d jobs", name, max_pages, len(jobs))
@@ -142,7 +160,7 @@ def scrape_workday(
         # already got every job in the first pass.
         location_facets = {key: ids for key, ids in applied_facets.items() if key not in CATEGORY_FACET_KEYS}
         if location_facets != applied_facets:
-            for term in DATA_SEARCH_TERMS:
+            for term in CORE_SEARCH_TERMS:
                 scrape_pass(location_facets, term, data_only=True)
 
     logger.info("%s: fetched %d jobs (site reported total=%s for the category facets)", name, len(jobs), total)

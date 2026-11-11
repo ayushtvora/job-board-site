@@ -10,7 +10,7 @@ public and unauthenticated.
   `department` fields are tenant-specific (Ubisoft's "Information
   Technology" function includes animators), so each company picks its scope
   from a custom field (`customField[]`, by `fieldLabel`), which also
-  becomes the job's category. Postings with a data title are kept
+  becomes the job's category. Postings with a core title (data, ML, software) are kept
   whatever the field says.
 - Per posting: `id` (stable numeric, external_id), `name`, `releasedDate`
   (ISO), `location.fullLocation`. Job page: `jobs.smartrecruiters.com/<company>/<id>`.
@@ -20,7 +20,7 @@ import logging
 
 import httpx
 
-from .base import NormalizedJob, is_data_title
+from .base import NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ def scrape_smartrecruiters(
     country: str = "ca",
 ) -> list[NormalizedJob]:
     """Keeps postings whose custom field `field_label` is in `field_values`,
-    or whose title is a data title."""
+    or whose title is a core title (data, ML, software)."""
     list_url = f"https://api.smartrecruiters.com/v1/companies/{company}/postings"
     jobs: list[NormalizedJob] = []
     offset = 0
@@ -51,7 +51,7 @@ def scrape_smartrecruiters(
             total = payload["totalFound"]
             for raw in payload["content"]:
                 value = custom_field(raw, field_label)
-                if value in field_values or is_data_title(raw["name"]):
+                if value in field_values or is_core_title(raw["name"]):
                     jobs.append(_normalize(raw, company, value or ""))
             offset += PAGE_SIZE
             if offset >= total or not payload["content"]:

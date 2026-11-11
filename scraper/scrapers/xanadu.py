@@ -22,7 +22,7 @@ import re
 
 import httpx
 
-from .base import NormalizedJob, clean_description, is_data_title
+from .base import NormalizedJob, clean_description, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def scrape() -> list[NormalizedJob]:
         and (
             ad.get("department") == "Software"
             or TECH_TITLE_PATTERN.search(ad.get("title") or "")
-            or is_data_title(ad.get("title") or "")
+            or is_core_title(ad.get("title") or "")
         )
     ]
     logger.info("Xanadu: fetched %d matching jobs (of %d total)", len(jobs), len(ads))

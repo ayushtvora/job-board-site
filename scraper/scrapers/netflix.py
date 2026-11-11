@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from .base import CANADA_PATTERN, NormalizedJob, is_data_title
+from .base import CANADA_PATTERN, NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ def scrape() -> list[NormalizedJob]:
                     continue
                 seen_ids.add(job_id)
                 canadian = [loc for loc in raw.get("locations") or [] if CANADA_PATTERN.search(loc)]
-                if canadian and (TITLE_PATTERN.search(raw.get("name") or "") or is_data_title(raw.get("name") or "")):
+                if canadian and (TITLE_PATTERN.search(raw.get("name") or "") or is_core_title(raw.get("name") or "")):
                     jobs.append(_normalize(raw, job_id, canadian))
             start += len(positions)
             if start >= total:

@@ -80,7 +80,7 @@ import urllib.parse
 
 from playwright.sync_api import sync_playwright
 
-from .base import BROWSER_LOCK, NormalizedJob, is_data_title
+from .base import BROWSER_LOCK, NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +136,7 @@ def scrape() -> list[NormalizedJob]:
     raw_jobs = payload["data"]["job_search_with_featured_jobs_v2"]["all_jobs"]
 
     jobs: list[NormalizedJob] = [
-        _normalize(raw) for raw in raw_jobs if TEAM in (raw.get("teams") or []) or is_data_title(raw["title"])
+        _normalize(raw) for raw in raw_jobs if TEAM in (raw.get("teams") or []) or is_core_title(raw["title"])
     ]
 
     logger.info("Meta: fetched %d matching jobs (of %d Canadian jobs)", len(jobs), len(raw_jobs))

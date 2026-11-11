@@ -29,7 +29,7 @@ import logging
 
 from playwright.sync_api import sync_playwright
 
-from .base import BROWSER_LOCK, NormalizedJob, is_data_title
+from .base import BROWSER_LOCK, NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ def scrape() -> list[NormalizedJob]:
     jobs = [
         _normalize(raw)
         for raw in postings
-        if _is_canada(raw) and (TEAMS.intersection(raw.get("Teams") or []) or is_data_title(raw["Title"]))
+        if _is_canada(raw) and (TEAMS.intersection(raw.get("Teams") or []) or is_core_title(raw["Title"]))
     ]
     logger.info("Uber: fetched %d matching jobs (of %d postings)", len(jobs), len(postings))
     return jobs

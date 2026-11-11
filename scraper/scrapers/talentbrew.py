@@ -20,7 +20,7 @@ ID is in the site's own job URLs (`/job/<city>/<slug>/<org>/<id>`).
   comes from the item's `data-category`, or else the passed label, and
   `posted_date` is None.
 - Data roles come from a second search with only the Canada facet and
-  `Keywords=<term>` for each of `DATA_SEARCH_TERMS`, keeping data titles.
+  `Keywords=<term>` for each of `CORE_SEARCH_TERMS`, keeping core titles (data, ML, software).
 - TalentBrew is only the career-site layer; the apply flow goes to the real
   ATS (Avature for both Intuit and Synopsys), passed as `platform`.
 """
@@ -32,12 +32,12 @@ from datetime import datetime
 import httpx
 from bs4 import BeautifulSoup
 
-from .base import DATA_SEARCH_TERMS, NormalizedJob, is_data_title
+from .base import CORE_SEARCH_TERMS, NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
 CANADA_GEONAME_ID = "6251999"
-DATA_SEARCH_CATEGORY = "Data (keyword search)"
+KEYWORD_SEARCH_CATEGORY = "Keyword search"
 MAX_PAGES = 20
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
@@ -92,8 +92,8 @@ def scrape_talentbrew(
                     job = _parse(link, base_url, label, platform)
                     if job is None:
                         continue
-                    data_on_page = data_on_page or is_data_title(job["title"])
-                    if job["external_id"] in jobs or (data_only and not is_data_title(job["title"])):
+                    data_on_page = data_on_page or is_core_title(job["title"])
+                    if job["external_id"] in jobs or (data_only and not is_core_title(job["title"])):
                         continue
                     jobs[job["external_id"]] = job
                     new_on_page += 1
@@ -103,8 +103,8 @@ def scrape_talentbrew(
 
         canada = [(CANADA_GEONAME_ID, "2")]
         scrape_pass(canada + [(category_id, "1") for category_id in category_ids], "", category_label, data_only=False)
-        for term in DATA_SEARCH_TERMS:
-            scrape_pass(canada, term, DATA_SEARCH_CATEGORY, data_only=True)
+        for term in CORE_SEARCH_TERMS:
+            scrape_pass(canada, term, KEYWORD_SEARCH_CATEGORY, data_only=True)
 
     logger.info("%s: fetched %d jobs", name, len(jobs))
     return list(jobs.values())

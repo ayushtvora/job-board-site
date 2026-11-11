@@ -11,11 +11,11 @@ once a page adds no new IDs. Response shape is `{"data": {"positions": [...]}}`.
 - Tenants differ in which facets work: Microsoft's `department=` param is
   silently ignored (filter client-side with `job_filter`), while Autodesk's
   repeatable `filter_job_category=` works (pass it in `extra_params`).
-- Data roles: Canadian jobs with a data title are kept whatever
+- Data roles: Canadian jobs with a core title (data, ML, software) are kept whatever
   `job_filter` says. Tenants that filter by category in `extra_params`
   also get a keyword search (`query=<term>`) for each of
-  `DATA_SEARCH_TERMS`, which is sorted by relevance, so paging stops at
-  the first page without a data title.
+  `CORE_SEARCH_TERMS`, which is sorted by relevance, so paging stops at
+  the first page without a core title.
 - `external_id` is the human req number (`displayJobId`, else `atsJobId`),
   falling back to Eightfold's own `id`.
 - `postedTs` is a Unix timestamp but is 0 on some tenants (Autodesk), so
@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from .base import CANADA_PATTERN, DATA_SEARCH_TERMS, NormalizedJob, is_data_title
+from .base import CANADA_PATTERN, CORE_SEARCH_TERMS, NormalizedJob, is_core_title
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ def scrape_eightfold(
 ) -> list[NormalizedJob]:
     """`category_label` overrides the per-job `department` as the category
     (for tenants where `department` isn't meaningful). `job_filter(raw)` can
-    narrow the scope client-side; Canadian jobs with a data title skip it."""
+    narrow the scope client-side; Canadian jobs with a core title (data, ML, software) skip it."""
     jobs: list[NormalizedJob] = []
     seen_ids: set[str] = set()
 
@@ -71,7 +71,7 @@ def scrape_eightfold(
         locations = raw.get("locations") or []
         if isinstance(locations, str):
             locations = [locations]
-        return is_data_title(raw.get("name") or "") and any(CANADA_PATTERN.search(loc) for loc in locations)
+        return is_core_title(raw.get("name") or "") and any(CANADA_PATTERN.search(loc) for loc in locations)
 
     with httpx.Client(timeout=30, headers=HEADERS) as client:
 
@@ -93,7 +93,7 @@ def scrape_eightfold(
                     keep = is_canadian_data(raw) if data_only else (job_filter is None or job_filter(raw) or is_canadian_data(raw))
                     if keep:
                         jobs.append(_normalize(raw, job_id, base_url, category_label))
-                if new_on_page == 0 or (data_only and not any(is_data_title(raw.get("name") or "") for raw in postings)):
+                if new_on_page == 0 or (data_only and not any(is_core_title(raw.get("name") or "") for raw in postings)):
                     break
                 start += len(postings)
             else:
@@ -104,7 +104,7 @@ def scrape_eightfold(
         # come from a keyword search. Without them the first pass already
         # saw every job for `location`.
         if extra_params:
-            for term in DATA_SEARCH_TERMS:
+            for term in CORE_SEARCH_TERMS:
                 scrape_pass(term, [], data_only=True)
 
     logger.info("%s: fetched %d jobs", name, len(jobs))

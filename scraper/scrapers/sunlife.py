@@ -17,9 +17,12 @@ docstring, and SOTI's, for how this pattern works in general). Sun Life-specific
   the list response, so `category` is a combined label for the three
   families. Location comes from the detail endpoint, since multi-location
   postings show a "3 Locations" placeholder in the list (same as Manulife).
+- Student and co-op postings are on a separate `Campus` site (found
+  2026-11-10; 6 Canadian postings), all in a "Temporary Employee" job
+  family, so that site is scoped by title (`base.is_core_title`).
 """
 
-from .base import NormalizedJob
+from .base import NormalizedJob, is_core_title
 from .workday_cxs import scrape_workday
 
 # Opaque Workday facet IDs, confirmed against the tenant's own facet metadata.
@@ -32,7 +35,8 @@ COUNTRY_FACET_ID = "a30a87ed25634629aa6c3958aa2b91ea"  # Canada
 
 
 def scrape() -> list[NormalizedJob]:
-    return scrape_workday(
+    jobs: dict[str, NormalizedJob] = {}
+    for job in scrape_workday(
         name="Sun Life",
         base_url="https://sunlife.wd3.myworkdayjobs.com",
         tenant="sunlife",
@@ -42,4 +46,16 @@ def scrape() -> list[NormalizedJob]:
             "Location_Country": [COUNTRY_FACET_ID],
         },
         category_label="IT",
-    )
+    ) + scrape_workday(
+        # Student and co-op postings live on a separate site, all in one
+        # "Temporary Employee" job family, so scope is by title.
+        name="Sun Life (Campus)",
+        base_url="https://sunlife.wd3.myworkdayjobs.com",
+        tenant="sunlife",
+        site="Campus",
+        applied_facets={"Location_Country": [COUNTRY_FACET_ID]},
+        category_label="Campus",
+        job_filter=lambda raw, _detail: is_core_title(raw["title"]),
+    ):
+        jobs.setdefault(job["external_id"], job)
+    return list(jobs.values())
