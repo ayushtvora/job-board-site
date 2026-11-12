@@ -108,8 +108,10 @@ export default function Home() {
   const [scoringStatus, setScoringStatus] = useState<ScoringStatus | null>(null);
   const scanInFlight = scanRequest?.status === "pending" || scanRequest?.status === "running";
 
-  const loadJobs = useCallback(async () => {
-    setLoading(true);
+  // `quiet` reloads (new scores, a finished scan) keep the current table on
+  // screen instead of flashing "Loading…" while the request runs.
+  const loadJobs = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
     const params = new URLSearchParams();
     if (showHidden) params.set("showHidden", "true");
     if (postedWithin) params.set("postedWithin", postedWithin);
@@ -146,7 +148,7 @@ export default function Home() {
       fetch("/api/scoring-status")
         .then((res) => res.json())
         .then((data: ScoringStatus) => {
-          if (lastScored.current !== null && lastScored.current !== data.scored) loadJobs();
+          if (lastScored.current !== null && lastScored.current !== data.scored) loadJobs(true);
           lastScored.current = data.scored;
           setScoringStatus(data);
         });
@@ -184,7 +186,7 @@ export default function Home() {
       const data: ScrapeRequest | null = await res.json();
       setScanRequest(data);
       if (data && data.status !== "pending" && data.status !== "running") {
-        await Promise.all([loadJobs(), loadScrapeStatus()]);
+        await Promise.all([loadJobs(true), loadScrapeStatus()]);
       }
     }, SCAN_POLL_INTERVAL_MS);
 
@@ -197,8 +199,8 @@ export default function Home() {
   // Picking a sector narrows the Company dropdown to that sector's companies.
   const companyOptions = sector ? companies.filter((c) => c.sectors.includes(sector)) : companies;
 
-  // Re-fetching after a checkbox edit can shrink the list, so the page is
-  // clamped rather than trusted.
+  // A background reload can shrink the list, so the page is clamped rather
+  // than trusted.
   const sortedJobs = sortJobs(jobs, sort);
   const pageCount = Math.max(1, Math.ceil(sortedJobs.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
@@ -272,15 +274,14 @@ export default function Home() {
     // (e.g. checking "Applied") just vanishes with no visual feedback.
     setJobs((prev) => prev.map((job) => (job.id === id ? { ...job, ...patch } : job)));
     try {
+      // No re-fetch afterwards: the row stays where it is (checked) instead
+      // of the table reloading on every click. It drops out of the view
+      // on the next load (page refresh or filter change).
       await fetch(`/api/jobs/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
-      // Re-fetch after that: whether a row still belongs in the current view
-      // depends on the server's filter logic, so the server is the source
-      // of truth for what the list looks like next.
-      await loadJobs();
     } finally {
       setSavingIds((prev) => {
         const next = new Set(prev);
