@@ -14,6 +14,9 @@ model Company {
   slug    String   @id
   name    String
   sectors String[] @default(["Other"])
+  // I have a referral here: its jobs' scores get REFERRAL_SCORE_BONUS and
+  // their scoring-queue priority a bonus too (src/lib/referral.ts).
+  referral Boolean @default(false)
 
   jobs       Job[]
   scrapeRuns ScrapeRun[]

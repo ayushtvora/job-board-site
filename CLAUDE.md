@@ -40,6 +40,9 @@ companies
                                   -- when a good share of its roles fit
                                   -- it. Set in the migration that adds
                                   -- the company
+  referral      boolean default false -- I have a referral here: its jobs
+                                  -- rank higher (see "Referrals" under
+                                  -- Job descriptions and relevance score)
 
 jobs
   id            serial PK
@@ -255,10 +258,14 @@ Both routes live in the Next.js app (`web`), backed by Prisma.
     "applied": false,
     "willApply": true,
     "score": 82,
+    "modelScore": 82,
+    "referral": false,
     "scoreReason": "Strong match on Java and SQL at a new-grad level.",
     "scoreBasis": "description"
   }
   ```
+  `score` includes the referral bonus (and sorts by it); `modelScore` is
+  `jobs.score` as the model gave it.
   `postedDate` is always a date string, never `null` — see the posted date
   fallback rule in the Default view section above. `score`, `scoreReason`
   and `scoreBasis` are `null` until the job is scored. The description is
@@ -1535,6 +1542,15 @@ item, capped at 20k chars). It's filled in one of two ways:
   put 11 of the 12 in its top 20%, against ~2 for a random order. The
   weights were fitted on that small sample. Bump `PRIORITY_VERSION` after
   changing the heuristic; a resume change recomputes it too.
+- **Referrals** (added 2026-11-12, `src/lib/referral.ts`): jobs at a
+  company with `companies.referral = true` show and sort with +10 on their
+  score (capped at 100, marked with a superscript "R"; `jobs.score` keeps
+  the model's own score, so changing the list never re-scores), and get
+  +2 on their queue priority. The referral list is part of the priority
+  key, so changing it recomputes priorities. Set on 2026-11-12 for RBC,
+  Manulife, Liberty Mutual, Mars, Eclipse, ATS, Accenture, BC Centre for
+  Ability, DEV IT, Metrolinx, TCS and Symcor. (The Government of Ontario
+  isn't scraped; see Ontario Public Service under "Fifth wave".)
 - Model: `SCORING_MODEL=<provider>:<model>`, `google` or `anthropic`
   (AI SDK provider registry, `model.ts`). Default
   `google:gemini-3.5-flash-lite`, on the Gemini API free tier (an AI

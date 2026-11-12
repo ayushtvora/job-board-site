@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { effectivePostedDate, serializeJob } from "@/lib/serializeJob";
 import { Prisma } from "@/generated/prisma/client";
+import { displayedScore } from "@/lib/referral";
 
 function descendingNullsLast(a: number | null, b: number | null): number {
   if (a === null || b === null) return (a === null ? 1 : 0) - (b === null ? 1 : 0);
@@ -66,7 +67,8 @@ export async function GET(request: NextRequest) {
     omit: { description: true },
   });
 
-  // Best match first: score, then the scoring queue's local estimate
+  // Best match first: score (with the referral bonus, see
+  // src/lib/referral.ts), then the scoring queue's local estimate
   // (score_priority, see src/lib/scoring/priority.ts) to break ties and to
   // order jobs not scored yet, then newest first. Jobs without a score or
   // priority go last. Sorted in JS rather than via Prisma's orderBy: the
@@ -74,7 +76,10 @@ export async function GET(request: NextRequest) {
   // first_seen_at, which isn't expressible as a plain column sort, and the
   // row counts here are small enough that this costs nothing.
   jobs.sort((a, b) => {
-    const scoreDiff = descendingNullsLast(a.score, b.score);
+    const scoreDiff = descendingNullsLast(
+      displayedScore(a.score, a.company.referral),
+      displayedScore(b.score, b.company.referral),
+    );
     if (scoreDiff !== 0) return scoreDiff;
     const priorityDiff = descendingNullsLast(a.scorePriority, b.scorePriority);
     if (priorityDiff !== 0) return priorityDiff;

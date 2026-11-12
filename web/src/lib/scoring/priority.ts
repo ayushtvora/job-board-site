@@ -1,3 +1,4 @@
+import { REFERRAL_PRIORITY_BONUS } from "@/lib/referral";
 import type { Field } from "./resume";
 
 // A cheap local estimate of how well a job fits the resume, used only to
@@ -8,11 +9,13 @@ import type { Field } from "./resume";
 // (12 of them 70+): ordering by this put 11 of those 12 in the top 20%,
 // where a random order puts about 2. Seniority in the title is the
 // strongest signal, as in the scoring rubric (scoreJob.ts). The weights
-// were fitted on that same small sample, so treat them as rough.
+// were fitted on that same small sample, so treat them as rough. Jobs at a
+// company where I have a referral get REFERRAL_PRIORITY_BONUS on top.
 //
 // Bump PRIORITY_VERSION after changing anything here, so every job's
-// priority is recomputed.
-export const PRIORITY_VERSION = 1;
+// priority is recomputed. (Changing which companies are referrals
+// recomputes them too: the referral list is part of the priority key.)
+export const PRIORITY_VERSION = 2;
 
 const SENIOR_TITLE =
   /\b(senior|sr\.?|staff|principal|lead|manager|director|head|architect|vp|chief|expert|specialist [3-9]|iii|iv|[3-9])\b/i;
@@ -59,7 +62,7 @@ export function buildPriorityModel(resumes: Map<Field, string>, descriptions: st
 
 export function jobPriority(
   model: PriorityModel,
-  job: { title: string; description: string | null; field: string },
+  job: { title: string; description: string | null; field: string; referral: boolean },
 ): number {
   const field = job.field as Field;
   const description = job.description ?? "";
@@ -75,6 +78,7 @@ export function jobPriority(
   const similarity = resumeVector && description ? cosine(tfidf(model, tokens(description)), resumeVector) : 0;
 
   return (
+    (job.referral ? REFERRAL_PRIORITY_BONUS : 0) +
     (SENIOR_TITLE.test(job.title) ? -3 : 0) +
     (JUNIOR_TITLE.test(job.title) ? 2 : 0) -
     0.6 * Math.min(minYears, 10) +

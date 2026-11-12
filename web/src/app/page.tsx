@@ -17,7 +17,10 @@ type Job = {
   postedDate: string;
   applied: boolean;
   willApply: boolean;
+  // Includes the referral bonus (src/lib/referral.ts); modelScore doesn't.
   score: number | null;
+  modelScore: number | null;
+  referral: boolean;
   scoreReason: string | null;
   scoreBasis: "description" | "title" | null;
 };
@@ -507,7 +510,8 @@ function renderSortHeader(label: string, key: SortKey, sort: Sort, sortBy: (key:
 }
 
 // 70+ is a good match, 50-69 a stretch, under 50 weak (see the rubric in
-// src/lib/scoring/scoreJob.ts). "~" marks a score from the title alone.
+// src/lib/scoring/scoreJob.ts). "~" marks a score from the title alone,
+// and a superscript "R" one that includes the referral bonus.
 function renderScore(job: Job) {
   if (job.score === null) {
     return (
@@ -518,11 +522,15 @@ function renderScore(job: Job) {
   }
   const level = job.score >= 70 ? styles.scoreHigh : job.score >= 50 ? styles.scoreMid : styles.scoreLow;
   const titleOnly = job.scoreBasis === "title";
-  const hover = (titleOnly ? "Scored from the title only (no description). " : "") + (job.scoreReason ?? "");
+  const hover =
+    (job.referral ? `Referral: model score ${job.modelScore} plus a referral bonus. ` : "") +
+    (titleOnly ? "Scored from the title only (no description). " : "") +
+    (job.scoreReason ?? "");
   return (
     <span className={`${styles.score} ${level}`} title={hover}>
       {titleOnly && "~"}
       {job.score}
+      {job.referral && <span className={styles.referralMark}>R</span>}
     </span>
   );
 }

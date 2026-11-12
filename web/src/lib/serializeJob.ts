@@ -1,4 +1,5 @@
 import type { Company, Job } from "@/generated/prisma/client";
+import { displayedScore } from "./referral";
 
 // Fall back to first_seen_at (the scrape that first found this job) when the
 // source site doesn't expose a posted date, so the column is never empty in
@@ -27,7 +28,10 @@ export function serializeJob(job: ListedJob) {
     postedDate: effectivePostedDate(job).toISOString().slice(0, 10),
     applied: job.applied,
     willApply: job.willApply,
-    score: job.score,
+    // Includes the referral bonus; modelScore is the model's own score.
+    score: displayedScore(job.score, job.company.referral),
+    modelScore: job.score,
+    referral: job.company.referral,
     scoreReason: job.scoreReason,
     scoreBasis: job.scoreBasis,
   };

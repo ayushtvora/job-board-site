@@ -203,12 +203,22 @@ async function scoreNextJob(failures: Map<number, number>): Promise<"scored" | "
 
 export /**
  * Each field's current priority key: a job whose priority_key differs was
- * given its priority with an older resume or heuristic (or never).
+ * given its priority with an older resume, heuristic or referral list (or
+ * never).
  */
-function priorityKeys(resumes: Map<Field, LoadedResume>): Map<Field, string> {
+async function priorityKeys(resumes: Map<Field, LoadedResume>): Promise<Map<Field, string>> {
+  const referrals = await prisma.company.findMany({
+    where: { referral: true },
+    select: { slug: true },
+    orderBy: { slug: "asc" },
+  });
+  const referralList = referrals.map((company) => company.slug).join(",");
   const keys = new Map<Field, string>();
   for (const [field, resume] of resumes) {
-    keys.set(field, createHash("sha256").update(`${resume.hash}|p${PRIORITY_VERSION}`).digest("hex").slice(0, 16));
+    keys.set(
+      field,
+      createHash("sha256").update(`${resume.hash}|p${PRIORITY_VERSION}|r${referralList}`).digest("hex").slice(0, 16),
+    );
   }
   return keys;
 }
@@ -242,7 +252,7 @@ async function priorityModel(resumes: Map<Field, LoadedResume>): Promise<Priorit
  * computed from the description the job will be scored with.
  */
 async function fillPriorities(resumes: Map<Field, LoadedResume>, ready: Prisma.JobWhereInput) {
-  const keys = priorityKeys(resumes);
+  const keys = await priorityKeys(resumes);
   for (;;) {
     const pending = await prisma.job.findMany({
       where: {
@@ -250,7 +260,7 @@ async function fillPriorities(resumes: Map<Field, LoadedResume>, ready: Prisma.J
         OR: [...keys].map(([field, key]) => ({ field, OR: [{ priorityKey: null }, { priorityKey: { not: key } }] })),
         AND: ready,
       },
-      select: { id: true, title: true, description: true, field: true },
+      select: { id: true, title: true, description: true, field: true, company: { select: { referral: true } } },
       take: PRIORITY_BATCH,
     });
     if (pending.length === 0) return;
@@ -259,7 +269,7 @@ async function fillPriorities(resumes: Map<Field, LoadedResume>, ready: Prisma.J
       pending.map((job) =>
         prisma.job.update({
           where: { id: job.id },
-          data: { scorePriority: jobPriority(model, job), priorityKey: keys.get(job.field as Field) },
+          data: { scorePriority: jobPriority(model, { ...job, referral: job.company.referral }), priorityKey: keys.get(job.field as Field) },
         }),
       ),
     );
