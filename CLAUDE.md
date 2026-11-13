@@ -1554,7 +1554,8 @@ item, capped at 20k chars). It's filled in one of two ways:
   +2 on their queue priority. The referral list is part of the priority
   key, so changing it recomputes priorities. Set on 2026-11-12 for RBC,
   Manulife, Liberty Mutual, Mars, Eclipse, ATS, Accenture, BC Centre for
-  Ability, DEV IT, Metrolinx, TCS and Symcor. (The Government of Ontario
+  Ability, DEV IT, Metrolinx, TCS and Symcor, plus TD on 2026-11-13.
+  (The Government of Ontario
   isn't scraped; see Ontario Public Service under "Fifth wave".)
 - Model: `SCORING_MODEL=<provider>:<model>`, `google` or `anthropic`
   (AI SDK provider registry, `model.ts`). Default
