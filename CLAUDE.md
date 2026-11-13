@@ -1345,7 +1345,11 @@ scraper. Each helper's docstring explains the API and the per-tenant hooks
 - `ashby.py` — `api.ashbyhq.com/posting-api/job-board/<org>`.
 - `jobs2web.py` — SuccessFactors Jobs2Web (Scotiabank's layer): `/go/<cat>/<id>/`
   landing pages, or `/search/` + `startrow` (plus optional
-  `search_params`, e.g. EY's country facet) when there are none.
+  `search_params`, e.g. EY's country facet) when there are none. Only one
+  Jobs2Web company scrapes at a time (`JOBS2WEB_LOCK`), and a 403/429 is
+  retried with exponential backoff (30s doubling to 240s): with all of
+  them in parallel, SAP's shared servers rate-limited the VPN exit for
+  over 90s at 6am, and ICBC and U of T never got through (2026-11-13).
 - `phenom.py` — `phApp.ddo` blob, `?category=` per request.
 - `dayforce.py` — Dayforce candidate portal JSON API (see Questrade below).
 - `eightfold.py` — Eightfold `/api/pcsx/search` (Microsoft, Autodesk).

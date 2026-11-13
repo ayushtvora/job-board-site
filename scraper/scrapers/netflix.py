@@ -18,10 +18,14 @@ Liberty Mutual uses) works without auth:
 - Fields: `display_job_id` (e.g. "JR42454", external_id), `name`,
   `locations[]`, `department`, `t_create` (Unix timestamp),
   `canonicalPositionUrl`.
+- It answers 429 now and then (failed the 6am runs on 2026-11-13 and the
+  first request of a manual run on 11-10, fine otherwise), so a 429 is
+  retried with exponential backoff, 30s doubling to 240s.
 """
 
 import logging
 import re
+import time
 from datetime import datetime, timezone
 
 import httpx
@@ -32,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 LIST_URL = "https://explore.jobs.netflix.net/api/apply/v2/jobs"
 MAX_PAGES = 50
+RATE_LIMIT_BACKOFF_SECONDS = tuple(30 * 2**attempt for attempt in range(4))
 TITLE_PATTERN = re.compile(
     r"engineer|developer|software|technical director|technical supervisor|technology|data|machine learning|security",
     re.IGNORECASE,
@@ -46,10 +51,7 @@ def scrape() -> list[NormalizedJob]:
 
     with httpx.Client(timeout=30, headers={"User-Agent": "Mozilla/5.0"}) as client:
         for _ in range(MAX_PAGES):
-            response = client.get(
-                LIST_URL, params={"domain": "netflix.com", "location": "Canada", "start": start, "num": 10}
-            )
-            response.raise_for_status()
+            response = _get(client, {"domain": "netflix.com", "location": "Canada", "start": start, "num": 10})
             payload = response.json()
             total = payload.get("count", 0)
             positions = payload.get("positions") or []
@@ -71,6 +73,17 @@ def scrape() -> list[NormalizedJob]:
 
     logger.info("Netflix: fetched %d matching jobs (of %d for location=Canada)", len(jobs), total)
     return jobs
+
+
+def _get(client: httpx.Client, params: dict) -> httpx.Response:
+    for wait in (*RATE_LIMIT_BACKOFF_SECONDS, None):
+        response = client.get(LIST_URL, params=params)
+        if response.status_code != 429 or wait is None:
+            break
+        logger.warning("Netflix: rate-limited (429), retrying in %ds", wait)
+        time.sleep(wait)
+    response.raise_for_status()
+    return response
 
 
 def _normalize(raw: dict, job_id: str, canadian_locations: list[str]) -> NormalizedJob:

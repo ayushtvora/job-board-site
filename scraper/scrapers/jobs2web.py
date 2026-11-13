@@ -29,10 +29,15 @@ Data roles: rows with a core title (data, ML, software) pass `department_filter`
 department, and sites scraped from a category landing page also get a
 `/search/?q=<term>` keyword search for each of `CORE_SEARCH_TERMS` (sorted
 by relevance, so paging stops at the first page without a core title).
+
+Rate limits: Jobs2Web sites share SAP's servers behind their own domains,
+so only one Jobs2Web company is scraped at a time (`JOBS2WEB_LOCK`), and a
+403/429 is retried with exponential backoff (see `_get`).
 """
 
 import logging
 import re
+import threading
 import time
 from collections.abc import Callable
 from datetime import datetime
@@ -46,8 +51,12 @@ from .base import CORE_SEARCH_TERMS, NormalizedJob, is_core_title
 logger = logging.getLogger(__name__)
 
 PAGE_SIZE = 25
-# Waits before retrying a 403/429 (see _get).
-RATE_LIMIT_BACKOFF_SECONDS = (30, 60)
+# Waits before retrying a 403/429 (see _get): exponential backoff, 30s
+# doubling to 240s, 7.5 minutes in all.
+RATE_LIMIT_BACKOFF_SECONDS = tuple(30 * 2**attempt for attempt in range(4))
+# Held for a company's whole scrape, so only one Jobs2Web site is scraped at
+# a time (see _get for why).
+JOBS2WEB_LOCK = threading.Lock()
 MAX_PAGES = 50
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"}
 JOB_ID_RE = re.compile(r"/(\d+)/?$")
@@ -74,7 +83,7 @@ def scrape_jobs2web(
     jobs: list[NormalizedJob] = []
     seen_ids: set[str] = set()
 
-    with httpx.Client(timeout=30, headers=HEADERS, follow_redirects=True) as client:
+    with JOBS2WEB_LOCK, httpx.Client(timeout=30, headers=HEADERS, follow_redirects=True) as client:
 
         def scrape_pass(path: str | None, query: str, label: str, data_only: bool) -> int | None:
             """One paged listing. With `data_only` (a keyword search, sorted
@@ -158,6 +167,15 @@ def _get(client: httpx.Client, name: str, url: str, params: dict) -> httpx.Respo
     behind their own domains (so host_limits can't group them), which makes
     this look like a short rate limit on the burst, so a 403/429 is retried
     after a wait before giving up.
+
+    That wasn't enough: from 2026-11-11 to 11-13, with ~13 Jobs2Web
+    companies scraping in parallel at 6am, Celestica, Hydro One, Bank of
+    Canada, ICBC and U of T kept getting 403s through both retries (30s +
+    60s), while single requests from the same VPN exit got 200 the whole
+    time. ICBC and U of T never succeeded. So Jobs2Web companies now run one
+    at a time (`JOBS2WEB_LOCK`), and the backoff doubles up to 240s. The
+    lock stays held while waiting, which pauses every Jobs2Web site until
+    the limit clears.
     """
     for wait in (*RATE_LIMIT_BACKOFF_SECONDS, None):
         try:
