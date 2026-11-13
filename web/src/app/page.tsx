@@ -99,6 +99,7 @@ export default function Home() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
   const [scrapeStatuses, setScrapeStatuses] = useState<ScrapeStatus[]>([]);
+  const [newJobCount, setNewJobCount] = useState<number | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [scanRequest, setScanRequest] = useState<ScrapeRequest | null>(null);
   const [page, setPage] = useState(0);
@@ -126,10 +127,14 @@ export default function Home() {
     setLoading(false);
   }, [showHidden, postedWithin, field, sector, company, city]);
 
+  // Also loads the past-24h new-job count, which only changes when a scrape
+  // finishes, so it's refreshed alongside the scrape status rather than polled.
   const loadScrapeStatus = useCallback(async () => {
-    const res = await fetch("/api/scrape-status");
-    const data: ScrapeStatus[] = await res.json();
+    const [statusRes, newJobsRes] = await Promise.all([fetch("/api/scrape-status"), fetch("/api/new-jobs")]);
+    const data: ScrapeStatus[] = await statusRes.json();
+    const newJobs: { count: number } = await newJobsRes.json();
     setScrapeStatuses(data);
+    setNewJobCount(newJobs.count);
   }, []);
 
   useEffect(() => {
@@ -323,6 +328,11 @@ export default function Home() {
           <span className={styles.lastRun}>
             Last run: {lastRunAt ? new Date(lastRunAt).toLocaleString() : "never"}
           </span>
+          {newJobCount !== null && (
+            <span className={styles.lastRun}>
+              {newJobCount.toLocaleString()} new {newJobCount === 1 ? "job" : "jobs"} found in the past 24 hours
+            </span>
+          )}
           {scanRequest?.status === "error" && (
             <span className={styles.scanError}>
               Last scan failed{scanRequest.errorMessage ? `: ${scanRequest.errorMessage}` : ""}
