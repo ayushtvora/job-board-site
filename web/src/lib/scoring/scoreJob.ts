@@ -4,6 +4,10 @@ import { scoringModel } from "./model";
 
 // Bump when the prompt or schema changes, so every job gets re-scored with
 // the new one (it's part of each job's score_key).
+//
+// Deliberately not bumped on 2026-11-13, when the enrollment rule and
+// today's date were added: existing scores were kept, and only jobs scored
+// from then on use the new prompt.
 export const PROMPT_VERSION = 1;
 
 // Descriptions are stored up to 20k chars; this keeps the prompt (and the
@@ -24,6 +28,8 @@ Weigh, in order:
 2. Required skills and technologies versus the resume.
 3. Domain and type of work versus the candidate's experience and projects.
 Preferred or "nice to have" qualifications count much less than required ones.
+
+Enrollment: if the posting (typically a co-op or internship) requires the candidate to be currently enrolled in a degree program, e.g. a bachelor's, or to return to school after the work term, and the resume shows the candidate has already graduated (compare the degree's end date with today's date), the candidate isn't eligible: score 0-25 however well the skills match, and say so in the reason. This doesn't apply when the posting also accepts recent graduates.
 
 Be calibrated: most postings are not strong matches. Judge only from the resume and the posting; don't assume skills the resume doesn't show.
 
@@ -70,7 +76,9 @@ export async function scoreJob(job: JobToScore, resume: string): Promise<ScoreRe
   const { output } = await generateText({
     model: scoringModel(),
     system: SYSTEM_PROMPT,
-    prompt: `<resume>\n${resume}\n</resume>\n\n<posting>\n${posting}\n</posting>`,
+    // Today's date lets the model tell a finished degree from one in
+    // progress (the enrollment rule) and count years of experience.
+    prompt: `Today's date: ${new Date().toISOString().slice(0, 10)}\n\n<resume>\n${resume}\n</resume>\n\n<posting>\n${posting}\n</posting>`,
     output: Output.object({ schema }),
     // The worker handles retries (and backs off on rate limits) itself.
     maxRetries: 0,

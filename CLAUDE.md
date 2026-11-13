@@ -1517,6 +1517,13 @@ item, capped at 20k chars). It's filled in one of two ways:
   then domain. Jobs without a description are scored from the title and
   marked `score_basis = "title"`. Bump `PROMPT_VERSION` after changing the
   prompt, so every job is re-scored.
+- **Enrollment rule** (added 2026-11-13): a posting (usually a co-op or
+  internship) that requires current enrollment, e.g. in a bachelor's,
+  and doesn't also accept recent graduates scores 0-25 when the resume's
+  degree has already ended. The prompt now includes today's date so the
+  model can tell. `PROMPT_VERSION` was deliberately **not** bumped, so
+  scores from before stayed as they were; only jobs scored afterwards
+  (new ones, or re-scored after a resume change) use the rule.
 - `worker.ts`, started by `src/instrumentation.ts` when the server starts
   (only if a resume URL and the provider's key are set): scores one job at
   a time at `SCORING_RPM`/min, newest postings first, only jobs in the
