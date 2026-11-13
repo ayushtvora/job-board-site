@@ -152,8 +152,8 @@ Scraper behavior:
 
 The main table, in column order:
 
-| Score | Company | Job Title | Location | Job ID | Link | Posted Date | Applied | Will Apply |
-|---|---|---|---|---|---|---|---|---|
+| Score | Company | Job Title | Location | Link | Posted Date | Applied | Will Apply |
+|---|---|---|---|---|---|---|---|
 
 - **Score** is `jobs.score`, coloured by band (70+ good, 50-69 stretch,
   under 50 weak), with `score_reason` on hover. "~" before it means it was
@@ -168,7 +168,8 @@ The main table, in column order:
 - **Location** shows `jobs.cities` (the first 3, then "+N more", with the
   raw `location` on hover), or the raw `location` when it names no city
   (e.g. just "Canada").
-- **Job ID** is `jobs.external_id`.
+- The job ID (`jobs.external_id`) isn't a column; it's shown at the top
+  of the row's detail panel.
 - The table shows 50 jobs per page (paged client-side, with the total
   count above it); changing a filter goes back to page 1. Long titles and
   locations are clamped to two lines, with the full text on hover.

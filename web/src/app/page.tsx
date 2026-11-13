@@ -407,7 +407,6 @@ export default function Home() {
                   <th>Company</th>
                   <th>Job Title</th>
                   <th>Location</th>
-                  <th>Job ID</th>
                   <th>Link</th>
                   {renderSortHeader("Posted Date", "posted", sort, sortBy)}
                   <th>Applied</th>
@@ -429,7 +428,6 @@ export default function Home() {
                       </span>
                     </td>
                     <td className={styles.location}>{renderLocation(job)}</td>
-                    <td className={styles.jobId}>{job.externalId}</td>
                     <td className={styles.nowrap}>
                       <a
                         href={job.url}
@@ -478,7 +476,7 @@ export default function Home() {
   );
 }
 
-const COLUMN_COUNT = 9;
+const COLUMN_COUNT = 8;
 
 // Unscored jobs always sort last, in either direction. Ties keep the
 // API's order (Array.prototype.sort is stable): the local priority
@@ -539,6 +537,9 @@ function renderScore(job: Job) {
 function renderDetails(job: Job, detail: JobDetail | null) {
   return (
     <div className={styles.details}>
+      <p className={styles.muted}>
+        Job ID: <span className={styles.jobId}>{job.externalId}</span>
+      </p>
       {job.scoreReason && (
         <p className={styles.detailReason}>
           <strong>{job.scoreBasis === "title" ? "Score (from the title only): " : "Score: "}</strong>
