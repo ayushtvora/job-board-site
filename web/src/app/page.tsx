@@ -31,6 +31,8 @@ type JobDetail = Job & {
   missingSkills: string[];
 };
 
+type AppliedCounts = { last24h: number; last7d: number };
+
 type ScoringStatus = {
   scored: number;
   total: number;
@@ -100,6 +102,7 @@ export default function Home() {
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
   const [scrapeStatuses, setScrapeStatuses] = useState<ScrapeStatus[]>([]);
   const [newJobCount, setNewJobCount] = useState<number | null>(null);
+  const [appliedCounts, setAppliedCounts] = useState<AppliedCounts | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [scanRequest, setScanRequest] = useState<ScrapeRequest | null>(null);
   const [page, setPage] = useState(0);
@@ -127,7 +130,7 @@ export default function Home() {
     setLoading(false);
   }, [showHidden, postedWithin, field, sector, company, city]);
 
-  // Also loads the past-24h new-job count, which only changes when a scrape
+  // Also loads the last scan's new-job count, which only changes when a scrape
   // finishes, so it's refreshed alongside the scrape status rather than polled.
   const loadScrapeStatus = useCallback(async () => {
     const [statusRes, newJobsRes] = await Promise.all([fetch("/api/scrape-status"), fetch("/api/new-jobs")]);
@@ -144,6 +147,18 @@ export default function Home() {
   useEffect(() => {
     loadScrapeStatus();
   }, [loadScrapeStatus]);
+
+  // Only changes when an Applied checkbox does, so it's loaded on page load
+  // and after each of those, not polled.
+  const loadAppliedCounts = useCallback(async () => {
+    const res = await fetch("/api/applied-counts");
+    const data: AppliedCounts = await res.json();
+    setAppliedCounts(data);
+  }, []);
+
+  useEffect(() => {
+    loadAppliedCounts();
+  }, [loadAppliedCounts]);
 
   // Scores arrive in the background, so the progress line refreshes on an
   // interval, and the table too whenever more jobs have been scored.
@@ -287,6 +302,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
+      if ("applied" in patch) loadAppliedCounts();
     } finally {
       setSavingIds((prev) => {
         const next = new Set(prev);
@@ -330,7 +346,13 @@ export default function Home() {
           </span>
           {newJobCount !== null && (
             <span className={styles.lastRun}>
-              {newJobCount.toLocaleString()} new {newJobCount === 1 ? "job" : "jobs"} found in the past 24 hours
+              {newJobCount.toLocaleString()} new {newJobCount === 1 ? "job" : "jobs"} found in the last scan
+            </span>
+          )}
+          {appliedCounts && (
+            <span className={styles.lastRun}>
+              Applied to {appliedCounts.last24h.toLocaleString()} in the past 24 hours,{" "}
+              {appliedCounts.last7d.toLocaleString()} in the past 7 days
             </span>
           )}
           {scanRequest?.status === "error" && (

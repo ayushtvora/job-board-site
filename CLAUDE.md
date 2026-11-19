@@ -162,9 +162,11 @@ The main table, in column order:
   direction; unscored jobs always last; back to page 1). The table opens
   sorted by Score, highest first (the default sort below). A line above the
   table shows "Scored X of Y jobs" and the scoring worker's last error.
-  Next to "Last run", the page shows how many jobs the scraper first found
-  in the past 24 hours (`GET /api/new-jobs`), loaded on page load and
-  when a scan finishes, not polled.
+  Next to "Last run", the page shows how many new jobs the last scan
+  found (`GET /api/new-jobs`), loaded on page load and
+  when a scan finishes, not polled; and how many jobs I applied to in the
+  past 24 hours and 7 days (`GET /api/applied-counts`), loaded on page
+  load and after each Applied checkbox change.
 - Clicking a row (anywhere but its link or checkboxes) opens a panel under
   it with the score reason, matched and missing skills, and the
   description, loaded from `GET /api/jobs/:id`.
@@ -314,8 +316,15 @@ Both routes live in the Next.js app (`web`), backed by Prisma.
   pushed — keeps web and scraper decoupled through Postgres only.
 
 **`GET /api/new-jobs`**
-- `{ "count" }`: jobs whose `first_seen_at` is in the past 24 hours,
-  whatever their status.
+- `{ "count" }`: new jobs from the last scan, whatever their status: per
+  company, jobs whose `first_seen_at` is at or after the start of its most
+  recent `scrape_runs` row, summed. (`--company` runs count as that
+  company's last scan.)
+
+**`GET /api/applied-counts`**
+- `{ "last24h", "last7d" }`: jobs with `applied = true` and `applied_at`
+  in the past 24 hours / 7 days. Unchecking Applied clears `applied_at`,
+  so an unchecked job stops counting.
 
 **`GET /api/scoring-status`**
 - `{ "scored", "total", "lastError", "lastErrorAt" }`: how many of the
