@@ -54,11 +54,17 @@ def scrape_oracle_recruiting(
     category_label: str = "",
     category_fn: Callable[[dict], str] | None = None,
     job_filter: Callable[[dict], bool] | None = None,
+    location_fn: Callable[[dict], str] | None = None,
+    max_pages: int = MAX_PAGES,
+    min_complete: float | None = None,
 ) -> list[NormalizedJob]:
     """`finder_filters` are extra `findReqs` pairs, e.g.
     `{"selectedCategoriesFacet": "<id>"}`. `job_filter(raw)` can drop jobs
     client-side, including keyword-search ones; `category_fn(raw)` overrides
-    `category_label`."""
+    `category_label`, and `location_fn(raw)` `PrimaryLocation`. Tenants with
+    more than `MAX_PAGES` pages pass `max_pages`. With `min_complete` (e.g.
+    0.98), the scrape raises if the first pass read less than that share of
+    the site's total, as a partial list would delete the missed jobs' rows."""
     api_url = f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
     job_url = f"https://{host}/hcmUI/CandidateExperience/en/sites/{site_number}/job/{{id}}"
 
@@ -73,7 +79,7 @@ def scrape_oracle_recruiting(
             the first page without one."""
             offset = 0
             total: int | None = None
-            for _ in range(MAX_PAGES):
+            for _ in range(max_pages):
                 pairs = {
                     "siteNumber": site_number,
                     "facetsList": facets_list,
@@ -104,7 +110,7 @@ def scrape_oracle_recruiting(
                         "external_id": job_id,
                         "title": raw["Title"].strip(),
                         "url": job_url.format(id=job_id),
-                        "location": raw.get("PrimaryLocation") or "",
+                        "location": location_fn(raw) if location_fn else (raw.get("PrimaryLocation") or ""),
                         "category": KEYWORD_SEARCH_CATEGORY if data_only else (category_fn(raw) if category_fn else category_label),
                         "posted_date": raw.get("PostedDate"),
                         "platform": "Oracle Recruiting Cloud",
@@ -114,10 +120,12 @@ def scrape_oracle_recruiting(
                 if offset >= total or (data_only and not any(is_core_title(raw["Title"]) for raw in requisitions)):
                     break
             else:
-                logger.warning("%s scrape hit MAX_PAGES=%d without finishing — got %d jobs", name, MAX_PAGES, len(jobs))
+                logger.warning("%s scrape hit max_pages=%d without finishing — got %d jobs", name, max_pages, len(jobs))
             return total
 
         total = scrape_pass(finder_filters or {}, data_only=False)
+        if min_complete is not None and (not total or len(seen_ids) < total * min_complete):
+            raise RuntimeError(f"{name}: read only {len(seen_ids)} of {total} postings")
         # Data roles outside the category facet, by keyword. Without a
         # category facet the first pass already saw every job.
         location_filters = {k: v for k, v in (finder_filters or {}).items() if k != "selectedCategoriesFacet"}

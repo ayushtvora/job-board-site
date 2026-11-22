@@ -176,6 +176,9 @@ from . import lululemon
 from . import dwave
 from . import ices
 from . import mars
+from . import siemens
+from . import jpmorgan
+from . import kpmg
 
 # Adding a new company: write scrapers/<slug>.py exposing scrape() -> list[NormalizedJob],
 # add it here, and add a matching row to the companies table. Companies on a
@@ -359,4 +362,7 @@ SCRAPERS: dict[str, Callable[[], list[NormalizedJob]]] = {
     "dwave": dwave.scrape,
     "ices": ices.scrape,
     "mars": mars.scrape,
+    "siemens": siemens.scrape,
+    "jpmorgan": jpmorgan.scrape,
+    "kpmg": kpmg.scrape,
 }

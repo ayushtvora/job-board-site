@@ -179,6 +179,12 @@ OTHER_CITY_PATTERN = re.compile(
 NOT_CITY_PATTERN = re.compile(
     r"remote|t[eé]l[eé]travail|home|office|canada|^can$|various|locations?\b|^\W*$", re.IGNORECASE
 )
+# One US place in a ";"-separated list, as Oracle writes it ("Waterloo, IA,
+# United States"). job_cities drops these first: several share a Canadian
+# city's name (Waterloo IA, Scarborough ME, Richmond Hill NY). Only a whole
+# "City, ST, United States" item matches, so a Canadian city earlier in a
+# comma-joined list is never swallowed.
+US_PLACE_PATTERN = re.compile(r"(?:^|[;|])\s*(?:[^;|,]+,\s*)?[A-Z]{2},\s*United States(?=\s*(?:[;|]|$))")
 REMOTE_PATTERN = re.compile(r"remote|home[ -]based|virtual|work from home|t[eé]l[eé]travail", re.IGNORECASE)
 
 
@@ -186,18 +192,19 @@ def job_cities(location: str) -> list[str]:
     """The Canadian cities in a location string, in the order they appear,
     plus "Remote" for remote postings. Empty when the string names no
     city (e.g. just "Canada"); the UI then shows the raw location."""
+    places = US_PLACE_PATTERN.sub(";", location)
     found = {}
     for name, pattern in CITY_PATTERNS:
-        match = pattern.search(location)
+        match = pattern.search(places)
         if match:
             found[name] = match.start()
-    for match in OTHER_CITY_PATTERN.finditer(location):
+    for match in OTHER_CITY_PATTERN.finditer(places):
         # Keep only the last part of e.g. "AMER - Canada - Kamloops".
         name = re.split(r"\s+-\s+", match.group(1))[-1].strip(" .-")
         if NOT_CITY_PATTERN.search(name) or CANADA_PATTERN.fullmatch(name):
             continue
         # A street after its number ("8585 Cote-De-Liesse, QC").
-        if location[: match.start(1)].rstrip()[-1:].isdigit():
+        if places[: match.start(1)].rstrip()[-1:].isdigit():
             continue
         if any(pattern.search(name) for _, pattern in CITY_PATTERNS):
             continue

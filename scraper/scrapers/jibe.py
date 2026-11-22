@@ -1,4 +1,4 @@
-"""Shared helper for iCIMS "Jibe" career-site scrapers (Kinaxis, AMD).
+"""Shared helper for iCIMS "Jibe" career-site scrapers (Kinaxis, AMD, KPMG).
 
 Jibe front-ends (job URLs like `/jobs/<reqId>?lang=en-us`, apply links to
 `<tenant>.icims.com`) serve their listing as open JSON:
@@ -20,6 +20,7 @@ Jibe front-ends (job URLs like `/jobs/<reqId>?lang=en-us`, apply links to
 """
 
 import logging
+import time
 from collections.abc import Callable
 
 import httpx
@@ -39,15 +40,20 @@ def scrape_jibe(
     job_path: str,
     job_filter: Callable[[dict], bool],
     params: dict[str, str] | None = None,
+    location_fn: Callable[[dict], str] | None = None,
+    page_delay: float = 0,
 ) -> list[NormalizedJob]:
     """`job_path` is the job page path under `base_url`, e.g. "/jobs" or
-    "/careers-home/jobs"."""
+    "/careers-home/jobs". `location_fn(raw)` overrides `full_location`;
+    `page_delay` is the seconds between pages, for a robots.txt crawl-delay."""
     jobs: list[NormalizedJob] = []
     seen = 0
     total = 0
 
     with httpx.Client(timeout=30, headers=HEADERS) as client:
         for page in range(1, MAX_PAGES + 1):
+            if page > 1 and page_delay:
+                time.sleep(page_delay)
             response = client.get(f"{base_url}/api/jobs", params={"page": page, "internal": "false", **(params or {})})
             response.raise_for_status()
             payload = response.json()
@@ -56,7 +62,7 @@ def scrape_jibe(
             if not page_jobs:
                 break
             seen += len(page_jobs)
-            jobs.extend(_normalize(raw, base_url, job_path) for raw in page_jobs if job_filter(raw))
+            jobs.extend(_normalize(raw, base_url, job_path, location_fn) for raw in page_jobs if job_filter(raw))
             if seen >= total:
                 break
         else:
@@ -70,13 +76,15 @@ def categories(raw: dict) -> list[str]:
     return [c.strip() for c in raw.get("category") or []]
 
 
-def _normalize(raw: dict, base_url: str, job_path: str) -> NormalizedJob:
+def _normalize(
+    raw: dict, base_url: str, job_path: str, location_fn: Callable[[dict], str] | None
+) -> NormalizedJob:
     posted = raw.get("posted_date")
     return {
         "external_id": str(raw["req_id"]),
         "title": raw["title"].strip(),
         "url": f"{base_url}{job_path}/{raw['slug']}?lang=en-us",
-        "location": raw.get("full_location") or "",
+        "location": location_fn(raw) if location_fn else (raw.get("full_location") or ""),
         "category": ", ".join(categories(raw)),
         "posted_date": posted[:10] if posted else None,
         "platform": "iCIMS",

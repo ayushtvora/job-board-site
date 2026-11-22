@@ -542,10 +542,14 @@ not host cron (per the architecture decision above).
     - Other: **lululemon** (Avature keyword search), **D-Wave** (Rippling),
       **ICES** (BambooHR).
     - Added 2026-11-11: **Mars** (Workday, behind a Phenom front-end).
+  - Added 2026-11-22 (see "Siemens, JPMorgan Chase and KPMG" below):
+    **Siemens**, Canada (Avature); **JPMorgan Chase**, **Canada + US**,
+    no senior titles (Oracle Recruiting Cloud); **KPMG**, Canada (iCIMS
+    via Jibe).
   - **Loblaw** (was "Loblaw Digital") now reads careers.loblaw.ca, a
     Paradox site, since its Workday sites went empty.
   - Investigated but **not scraper-ready**: **CGI**, **Ontario Public
-    Service**, **Tesla**, **CN**, **Siemens** (see "Fifth wave scraping
+    Service**, **Tesla**, **CN** (see "Fifth wave scraping
     approach" below), **Citadel** (see "Sixth wave scraping approach"),
     and LinkedIn, Dialpad, Super.com, Dapper Labs, Huawei Canada, Nielsen,
     SickKids, BC Hydro, Vancity, TMU, SFU and the OSC (see "Seventh wave
@@ -1372,12 +1376,12 @@ scraper. Each helper's docstring explains the API and the per-tenant hooks
   Liberty Mutual's and Netflix's older `/api/apply/v2/jobs` API is not
   covered.
 - `oracle_recruiting.py` — Oracle Recruiting Cloud REST `findReqs` finder
-  (Oracle, Metrolinx).
+  (Oracle, Metrolinx, JPMorgan Chase).
 - `lever.py` — Lever postings API (Spotify).
 - `smartrecruiters.py` — SmartRecruiters posting API (Ubisoft, Arista),
   scoped by a custom field.
 - `talentbrew.py` — Radancy TalentBrew career sites (Intuit, Synopsys).
-- `jibe.py` — iCIMS "Jibe" front-ends' `/api/jobs` (Kinaxis, AMD).
+- `jibe.py` — iCIMS "Jibe" front-ends' `/api/jobs` (Kinaxis, AMD, KPMG).
 - `gcjobs.py` — the federal GC Jobs site (Government of Canada,
   Statistics Canada, NRC), filtered by hiring organization.
 - Still bespoke: the custom in-house sites (Amazon, Google, Apple, IBM,
@@ -1388,7 +1392,7 @@ scraper. Each helper's docstring explains the API and the per-tenant hooks
   newer career site), Xanadu (HiBob), Vidyard (Kula), FreshBooks (Gem),
   Government of BC (hrsmart), TransLink (PeopleSoft), BC Centre for Ability
   (ADP), NASA (USAJOBS), Loblaw (Paradox), lululemon (Avature keyword
-  search), D-Wave (Rippling) and ICES (BambooHR).
+  search), D-Wave (Rippling), ICES (BambooHR) and Siemens (Avature).
 - `workday_cxs.py` retries a 429 after 10/30/60s. The wd3 host serves TD,
   CIBC, Sun Life and others, and rate-limits them together.
 - Only Meta and Uber need a browser (Playwright) at scrape time; every
@@ -1406,7 +1410,8 @@ scraper. Each helper's docstring explains the API and the per-tenant hooks
   codes because they collide with other countries' codes (Slovakia,
   Netherlands, Peru, and the Dutch province Noord-Brabant, e.g. ATS's
   "Breda, NB, NL").
-- Scope is all of Canada, never a single province. Workday tenants without
+- Scope is all of Canada (plus the US for JPMorgan Chase only), never a
+  single province. Workday tenants without
   a country facet pass every Canadian `locations` ID (re-checked
   2026-10-02: SOTI, Ontario Teachers', PayPal and Intel each have only
   Ontario locations, so their lists are complete).
@@ -1577,7 +1582,8 @@ item, capped at 20k chars). It's filled in one of two ways:
   +2 on their queue priority. The referral list is part of the priority
   key, so changing it recomputes priorities. Set on 2026-11-12 for RBC,
   Manulife, Liberty Mutual, Mars, Eclipse, ATS, Accenture, BC Centre for
-  Ability, DEV IT, Metrolinx, TCS and Symcor, plus TD and CIBC on 2026-11-13.
+  Ability, DEV IT, Metrolinx, TCS and Symcor, plus TD and CIBC on 2026-11-13,
+  and JPMorgan Chase and KPMG (Canada, not KPMG US) on 2026-11-22.
   (The Government of Ontario
   isn't scraped; see Ontario Public Service under "Fifth wave".)
 - Model: `SCORING_MODEL=<provider>:<model>`, `google` or `anthropic`
@@ -1752,10 +1758,8 @@ Things worth knowing across the batch:
     payload tried returned `totalCount: 0`. It needs a Playwright capture
     of the real search request, and Playwright couldn't launch in the
     sandbox this was investigated from.
-  - **Siemens**: Avature (`jobs.siemens.com`). Like EA, its country and
-    category facet IDs are AJAX-only and need a Playwright pass. The
-    free-text `SearchJobs/Canada` keyword search paginates in steps of 6,
-    and `jobOffset` repeats pages.
+  - (Siemens was on this list until 2026-11-22; see "Siemens, JPMorgan
+    Chase and KPMG" below.)
 
 ### Sixth wave scraping approach (investigated 2026-10-02)
 
@@ -1899,6 +1903,34 @@ IDs, counts):
   - SickKids (career.sickkids.ca doesn't resolve from here), BC Hydro
     (app.bchydro.com portal), Vancity, TMU, SFU and the OSC: no ATS
     found from their careers pages or search results.
+
+### Siemens, JPMorgan Chase and KPMG (investigated 2026-11-22)
+
+Each module's docstring has the details.
+
+- **Siemens** (`siemens.py`): Avature. Canada is `42386=812214`, and
+  paging is `folderOffset` in steps of 6 (`jobOffset` is ignored). Scope is
+  the R&D, IT and Cybersecurity job families plus core titles (18 of 97).
+  Detail pages give the locations, date and description.
+- **JPMorgan Chase** (`jpmorgan.py`): Oracle Recruiting Cloud,
+  `jpmc.fa.oraclecloud.com` site `CX_1001`. **The only company that
+  includes US jobs**, on request. Scope is the Technology and Data &
+  Analytics functions plus core titles, **minus senior titles** (also on
+  request, and only for this company): ~230 of 1,190 jobs, none of them
+  Canadian on 2026-11-22 (its 17 Canadian postings were all other
+  functions). Engineer II / III, Associate and Analyst titles stay.
+  - `jobs.cities` stays Canadian-only, so `job_cities` ignores
+    "City, ST, United States" items (Waterloo IA and Scarborough ME
+    would read as Canadian). US jobs show their raw location and aren't
+    in the City filter.
+  - Deleted requisitions (`_ORA_DELETED` IDs) are still in the feed and
+    are dropped.
+- **KPMG** (`kpmg.py`): careers.kpmg.ca, Jibe, 446 postings, 62 in scope
+  (IT and Digital categories, core titles, cyber/cloud/AI titles).
+  robots.txt asks for a 5s crawl delay. `kpmgus` is a separate member firm
+  and has no referral flag.
+- Siemens and JPMorgan raise on a short read, so a partial page walk shows
+  in the error banner and doesn't delete rows.
 
 ## Deployment
 
